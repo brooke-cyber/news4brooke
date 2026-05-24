@@ -54,10 +54,13 @@ const CAT_LABELS = {
 };
 
 // CORS proxy chain — tried in order, falls back on failure.
+// Primary: our own Netlify Function (same origin, no rate limits, fast).
+// Fallbacks: public proxies in case the function is down.
 const PROXIES = [
-  url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+  url => `/api/proxy?url=${encodeURIComponent(url)}`,
   url => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
   url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
+  url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
 ];
 
 const CACHE_KEY = 'n4b.cache.v3';
