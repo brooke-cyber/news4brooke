@@ -474,15 +474,177 @@ document.getElementById('tabs').addEventListener('click', e => {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 });
 
-const refreshBtn = document.getElementById('refresh-btn');
-refreshBtn.addEventListener('click', async () => {
-  refreshBtn.disabled = true;
-  refreshBtn.classList.add('spin');
-  try { await loadAll(true); }
-  finally {
-    refreshBtn.disabled = false;
-    refreshBtn.classList.remove('spin');
+const refreshBtn = document.getElementById('refresh-btn-top');
+if (refreshBtn) {
+  refreshBtn.addEventListener('click', async () => {
+    refreshBtn.disabled = true;
+    refreshBtn.classList.add('spin');
+    try { await loadAll(true); }
+    finally {
+      refreshBtn.disabled = false;
+      refreshBtn.classList.remove('spin');
+    }
+  });
+}
+
+// ============ Jennifer — AI chat assistant ============
+const JENNIFER_KEY = 'n4b.jennifer.chat.v1';
+
+const jenniferFab       = document.getElementById('jennifer-fab');
+const jenniferBackdrop  = document.getElementById('jennifer-backdrop');
+const jenniferSheet     = document.getElementById('jennifer-sheet');
+const jenniferClose     = document.getElementById('jennifer-close');
+const jenniferMessages  = document.getElementById('jennifer-messages');
+const jenniferForm      = document.getElementById('jennifer-form');
+const jenniferInput     = document.getElementById('jennifer-input');
+const jenniferSend      = document.getElementById('jennifer-send');
+const jenniferSuggest   = document.getElementById('jennifer-suggestions');
+
+function loadChat() {
+  try {
+    const raw = localStorage.getItem(JENNIFER_KEY);
+    if (!raw) return [];
+    return JSON.parse(raw);
+  } catch { return []; }
+}
+function saveChat(msgs) {
+  try { localStorage.setItem(JENNIFER_KEY, JSON.stringify(msgs.slice(-40))); } catch {}
+}
+let chatMessages = loadChat();
+
+function renderChat() {
+  jenniferMessages.innerHTML = '';
+  if (!chatMessages.length) {
+    jenniferMessages.innerHTML = `
+      <div class="jennifer-greeting">
+        <div class="hi">Hi Brooke, I'm Jennifer ✨</div>
+        <div class="pitch">I'm caught up on everything in your news feed — founders, AI, legal tech, markets, style, pop culture, and world events. Ask me anything.</div>
+      </div>`;
+    return;
   }
+  for (const m of chatMessages) {
+    const el = document.createElement('div');
+    el.className = `msg ${m.role}${m.error ? ' error' : ''}`;
+    el.textContent = m.content;
+    jenniferMessages.appendChild(el);
+  }
+  jenniferMessages.scrollTop = jenniferMessages.scrollHeight;
+}
+
+function showTyping() {
+  const t = document.createElement('div');
+  t.className = 'msg-typing';
+  t.id = 'jennifer-typing';
+  t.innerHTML = '<span></span><span></span><span></span>';
+  jenniferMessages.appendChild(t);
+  jenniferMessages.scrollTop = jenniferMessages.scrollHeight;
+}
+function hideTyping() {
+  const t = document.getElementById('jennifer-typing');
+  if (t) t.remove();
+}
+
+function newsContextForJennifer() {
+  // Pull the top recent headlines across categories — keep prompt small
+  const cached = readCache();
+  if (!cached || !cached.articles) return '';
+  const byCat = {};
+  for (const a of cached.articles) {
+    byCat[a.category] = byCat[a.category] || [];
+    if (byCat[a.category].length < 8) byCat[a.category].push(a);
+  }
+  let context = '';
+  for (const [cat, arts] of Object.entries(byCat)) {
+    context += `\n## ${CAT_LABELS[cat] || cat}\n`;
+    for (const a of arts) {
+      const when = timeAgo(a.timestamp);
+      context += `- [${a.source} · ${when}] ${a.title}${a.desc ? ' — ' + a.desc.slice(0, 160) : ''}\n`;
+    }
+  }
+  return context.slice(0, 12000); // bound prompt size
+}
+
+async function askJennifer(question) {
+  chatMessages.push({ role: 'user', content: question });
+  saveChat(chatMessages);
+  renderChat();
+  showTyping();
+
+  // Send last 10 turns + news context
+  const apiMessages = chatMessages.slice(-10).map(m => ({
+    role: m.role === 'assistant' ? 'assistant' : 'user',
+    content: m.content,
+  }));
+
+  try {
+    const res = await fetch('/api/jennifer', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        messages: apiMessages,
+        context: newsContextForJennifer(),
+      }),
+    });
+    const data = await res.json();
+    hideTyping();
+    if (!res.ok || data.error) {
+      chatMessages.push({ role: 'assistant', content: data.error || 'Sorry, something went wrong.', error: true });
+    } else {
+      chatMessages.push({ role: 'assistant', content: data.reply || '...' });
+    }
+  } catch (e) {
+    hideTyping();
+    chatMessages.push({ role: 'assistant', content: 'I had trouble reaching the server. Try again in a moment.', error: true });
+  }
+  saveChat(chatMessages);
+  renderChat();
+}
+
+function openJennifer() {
+  renderChat();
+  jenniferSheet.classList.add('open');
+  jenniferBackdrop.classList.add('open');
+  document.body.classList.add('jennifer-open');
+  setTimeout(() => jenniferInput && jenniferInput.focus(), 320);
+}
+function closeJennifer() {
+  jenniferSheet.classList.remove('open');
+  jenniferBackdrop.classList.remove('open');
+  document.body.classList.remove('jennifer-open');
+}
+jenniferFab?.addEventListener('click', openJennifer);
+jenniferClose?.addEventListener('click', closeJennifer);
+jenniferBackdrop?.addEventListener('click', closeJennifer);
+
+// Auto-grow textarea
+jenniferInput?.addEventListener('input', () => {
+  jenniferInput.style.height = 'auto';
+  jenniferInput.style.height = Math.min(jenniferInput.scrollHeight, 140) + 'px';
+});
+
+// Cmd/Ctrl-Enter to send; Enter on mobile also sends
+jenniferInput?.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    jenniferForm.requestSubmit();
+  }
+});
+
+jenniferForm?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const q = (jenniferInput.value || '').trim();
+  if (!q) return;
+  jenniferInput.value = '';
+  jenniferInput.style.height = 'auto';
+  jenniferSend.disabled = true;
+  try { await askJennifer(q); }
+  finally { jenniferSend.disabled = false; }
+});
+
+jenniferSuggest?.addEventListener('click', (e) => {
+  const btn = e.target.closest('.suggestion');
+  if (!btn) return;
+  askJennifer(btn.dataset.q);
 });
 
 setInterval(() => {
