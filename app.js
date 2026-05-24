@@ -1,4 +1,4 @@
-// News4Brooke — Apple News–style PWA, curated for Brooke
+// News4Brooke — premium news PWA, custom for Brooke
 
 const FEEDS = {
   'founders': [
@@ -91,7 +91,17 @@ const CAT_COLOR = {
   'canada-news': 'var(--c-canada)',
   'israel-iran': 'var(--c-israel)',
 };
-const SECTION_ORDER = ['founders','ai','legal-tech','markets','style','pop-culture','us-news','canada-news','israel-iran'];
+const SECTION_ORDER = ['ai','markets','style','pop-culture','us-news','canada-news','israel-iran'];
+
+// Source avatar colors (deterministic by source name)
+const SOURCE_COLORS = ['#6c8bef','#e88aa5','#67c9c1','#d4af6a','#a78bfa','#5ec27a','#e8a572','#8ba9d9','#d88a8a','#b89dd6'];
+function sourceColor(name) {
+  let h = 0; for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+  return SOURCE_COLORS[h % SOURCE_COLORS.length];
+}
+function sourceInitials(name) {
+  return name.replace(/[^A-Za-z0-9 &]/g,'').split(/\s+/).filter(Boolean).slice(0,2).map(w=>w[0]).join('').toUpperCase().slice(0,2) || '•';
+}
 
 const PROXIES = [
   url => `/api/proxy?url=${encodeURIComponent(url)}`,
@@ -100,13 +110,19 @@ const PROXIES = [
   url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
 ];
 
-const CACHE_KEY = 'n4b.cache.v6';
-const CACHE_TTL_MS = 90 * 1000;
+const CACHE_KEY     = 'n4b.cache.v7';
+const READ_KEY      = 'n4b.read.v1';
+const SAVED_KEY     = 'n4b.saved.v1';
+const LASTSEEN_KEY  = 'n4b.lastseen.v1';
+const CACHE_TTL_MS    = 90 * 1000;
 const AUTO_REFRESH_MS = 90 * 1000;
 const ITEMS_PER_SOURCE = 12;
 
 let activeCategory = 'all';
 let articles = [];
+let readSet  = new Set();
+let savedMap = {};   // { link: article }
+let lastSeenAt = Date.now();
 
 // ============ fetch + parse ============
 
@@ -124,47 +140,30 @@ async function fetchRss(url) {
   throw lastErr || new Error('All proxies failed');
 }
 
-function txt(node, tag) {
-  const el = node.querySelector(tag);
-  return el ? (el.textContent || '').trim() : '';
-}
-function stripHtml(s) {
-  if (!s) return '';
-  const tmp = document.createElement('div');
-  tmp.innerHTML = s;
-  return (tmp.textContent || tmp.innerText || '').replace(/\s+/g, ' ').trim();
-}
+function txt(node, tag) { const el = node.querySelector(tag); return el ? (el.textContent || '').trim() : ''; }
+function stripHtml(s) { if (!s) return ''; const tmp = document.createElement('div'); tmp.innerHTML = s; return (tmp.textContent || tmp.innerText || '').replace(/\s+/g, ' ').trim(); }
 
-// Extract a cover image URL from an RSS <item> node, trying multiple conventions.
 function extractImage(item) {
-  // 1. Walk direct children — media:content, media:thumbnail, enclosure, itunes:image
   for (const child of item.children) {
     const ln = (child.localName || child.nodeName || '').toLowerCase();
     if (ln === 'content') {
       const medium = (child.getAttribute('medium') || '').toLowerCase();
       const type = (child.getAttribute('type') || '').toLowerCase();
       if (medium === 'image' || type.startsWith('image')) {
-        const u = child.getAttribute('url');
-        if (u) return u;
+        const u = child.getAttribute('url'); if (u) return u;
       }
     }
-    if (ln === 'thumbnail') {
-      const u = child.getAttribute('url') || child.getAttribute('href');
-      if (u) return u;
-    }
+    if (ln === 'thumbnail') { const u = child.getAttribute('url') || child.getAttribute('href'); if (u) return u; }
     if (ln === 'enclosure') {
       const type = (child.getAttribute('type') || '').toLowerCase();
       const u = child.getAttribute('url');
       if (u && (type.startsWith('image') || /\.(jpe?g|png|webp|gif)(\?|$)/i.test(u))) return u;
     }
     if (ln === 'image') {
-      const u = child.getAttribute('href') || child.getAttribute('url');
-      if (u) return u;
-      const inner = child.querySelector && child.querySelector('url');
-      if (inner) return inner.textContent.trim();
+      const u = child.getAttribute('href') || child.getAttribute('url'); if (u) return u;
+      const inner = child.querySelector && child.querySelector('url'); if (inner) return inner.textContent.trim();
     }
   }
-  // 2. Try description / content:encoded HTML — extract first <img src>
   const htmlTags = ['encoded', 'description', 'summary', 'content'];
   for (const child of item.children) {
     const ln = (child.localName || child.nodeName || '').toLowerCase();
@@ -181,7 +180,6 @@ function parseRss(xmlText, sourceName, category) {
   const parser = new DOMParser();
   const doc = parser.parseFromString(xmlText, 'application/xml');
   if (doc.querySelector('parsererror')) return [];
-
   const items = [];
   doc.querySelectorAll('item').forEach(node => {
     const title = txt(node, 'title');
@@ -208,29 +206,34 @@ function parseRss(xmlText, sourceName, category) {
 function buildArticle(title, link, desc, pub, source, category, image) {
   let timestamp = Date.parse(pub);
   if (isNaN(timestamp)) timestamp = Date.now();
+  const cleanTitle = stripHtml(title);
+  const cleanDesc  = stripHtml(desc).slice(0, 320);
+  const wordCount = (cleanTitle + ' ' + cleanDesc).split(/\s+/).length;
+  // For brief snippets we use a min of 1; real article reading time can't be known w/o fetching the page
+  const readMin = Math.max(1, Math.round(wordCount / 200));
   return {
-    title: stripHtml(title),
+    title: cleanTitle,
     link: link.trim(),
-    desc: stripHtml(desc).slice(0, 240),
+    desc: cleanDesc,
     source, category, timestamp,
     image: image || null,
+    readMin,
   };
 }
 
-// ============ cache ============
+// ============ persistence ============
 
-function readCache() {
-  try {
-    const raw = localStorage.getItem(CACHE_KEY);
-    if (!raw) return null;
-    return JSON.parse(raw);
-  } catch { return null; }
-}
-function writeCache(arts) {
-  try {
-    localStorage.setItem(CACHE_KEY, JSON.stringify({ fetchedAt: Date.now(), articles: arts }));
-  } catch {}
-}
+function readCache()  { try { return JSON.parse(localStorage.getItem(CACHE_KEY) || 'null'); } catch { return null; } }
+function writeCache(arts) { try { localStorage.setItem(CACHE_KEY, JSON.stringify({ fetchedAt: Date.now(), articles: arts })); } catch {} }
+
+function loadRead()   { try { return new Set(JSON.parse(localStorage.getItem(READ_KEY) || '[]')); } catch { return new Set(); } }
+function saveRead()   { try { localStorage.setItem(READ_KEY, JSON.stringify(Array.from(readSet).slice(-2000))); } catch {} }
+
+function loadSaved()  { try { return JSON.parse(localStorage.getItem(SAVED_KEY) || '{}'); } catch { return {}; } }
+function persistSaved(){ try { localStorage.setItem(SAVED_KEY, JSON.stringify(savedMap)); } catch {} }
+
+function loadLastSeen(){ const v = parseInt(localStorage.getItem(LASTSEEN_KEY) || '0', 10); return isNaN(v) ? 0 : v; }
+function bumpLastSeen(){ localStorage.setItem(LASTSEEN_KEY, String(Date.now())); }
 
 // ============ orchestrator ============
 
@@ -267,7 +270,7 @@ async function loadAll(force = false) {
   updateGreeting(Date.now());
 }
 
-// ============ "For You" curation — ranks for hero + top stories ============
+// ============ curation ============
 
 function curatedForYou(all) {
   const weights = {
@@ -280,80 +283,90 @@ function curatedForYou(all) {
     const ageHrs = Math.max(0.5, (now - a.timestamp) / 3.6e6);
     const recency = 1 / Math.pow(ageHrs, 0.55);
     const w = weights[a.category] || 1;
-    // Prefer articles with images for hero candidates
     const imgBoost = a.image ? 1.06 : 1.0;
-    return { ...a, _score: recency * w * imgBoost };
+    const readDown = readSet.has(a.link) ? 0.55 : 1.0;
+    return { ...a, _score: recency * w * imgBoost * readDown };
   }).sort((x, y) => y._score - x._score);
-  // round-robin so no single category dominates
   const counts = {};
-  const picked = [];
-  const rest = [];
+  const picked = []; const rest = [];
   for (const a of scored) {
     counts[a.category] = counts[a.category] || 0;
     if (picked.length < 40 && counts[a.category] < 5) {
-      counts[a.category]++;
-      picked.push(a);
-    } else { rest.push(a); }
+      counts[a.category]++; picked.push(a);
+    } else rest.push(a);
   }
   return picked.concat(rest);
 }
 
-// ============ render ============
+// ============ render helpers ============
+
+function bookmarkSvg(saved) {
+  if (saved) {
+    return '<svg viewBox="0 0 14 16" fill="currentColor" stroke="currentColor" stroke-width="1.4"><path d="M2 1.5A1.5 1.5 0 0 1 3.5 0h7A1.5 1.5 0 0 1 12 1.5V15.5L7 12.5L2 15.5V1.5Z"/></svg>';
+  }
+  return '<svg viewBox="0 0 14 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M2 1.5A1.5 1.5 0 0 1 3.5 0h7A1.5 1.5 0 0 1 12 1.5V15.5L7 12.5L2 15.5V1.5Z"/></svg>';
+}
+
+function metaHtml(a) {
+  const isJustIn = (Date.now() - a.timestamp) < 30 * 60 * 1000;
+  const sa = `<span class="source-avatar" style="background:${sourceColor(a.source)}">${escapeHtml(sourceInitials(a.source))}</span>`;
+  return `
+    <div class="article-meta">
+      <span class="chip" data-cat="${a.category}">${CAT_LABELS[a.category] || ''}</span>
+      ${isJustIn ? '<span class="badge-new">Just in</span>' : ''}
+      ${sa}
+      <span class="source">${escapeHtml(a.source)}</span>
+      <span class="dot">·</span>
+      <span class="timeago">${timeAgo(a.timestamp)}</span>
+      <span class="dot">·</span>
+      <span class="readtime">${a.readMin} min</span>
+    </div>
+  `;
+}
 
 function renderArticleHero(a) {
+  const isSaved = !!savedMap[a.link];
+  const isRead  = readSet.has(a.link);
+  const cls = `article hero ${a.image ? '' : 'no-image'} ${isRead ? 'read' : ''}`;
+  const style = a.image ? '' : `style="--hero-tint:${CAT_COLOR[a.category] || 'var(--tint)'}"`;
   return `
-    <a class="article hero" href="${escapeAttr(a.link)}" target="_blank" rel="noopener">
-      ${a.image ? `
-        <div class="cover">
-          <img src="${escapeAttr(a.image)}" alt="" loading="eager" referrerpolicy="no-referrer" onerror="this.parentElement.style.display='none'" />
-          <div class="cover-shade"></div>
-        </div>` : ''}
+    <a class="${cls}" ${style} href="${escapeAttr(a.link)}" target="_blank" rel="noopener" data-link="${escapeAttr(a.link)}">
+      <button class="bookmark-btn ${isSaved ? 'saved' : ''}" data-action="save" data-link="${escapeAttr(a.link)}" aria-label="${isSaved ? 'Unsave' : 'Save'}">${bookmarkSvg(isSaved)}</button>
+      ${a.image ? `<div class="cover"><img src="${escapeAttr(a.image)}" alt="" loading="eager" referrerpolicy="no-referrer" onerror="this.parentElement.style.display='none'" /></div><div class="shade"></div>` : ''}
       <div class="body">
-        <div class="meta">
-          <span class="chip" data-cat="${a.category}">${CAT_LABELS[a.category] || ''}</span>
-          <span class="source">${escapeHtml(a.source)}</span>
-          <span class="dot">·</span>
-          <span class="timeago">${timeAgo(a.timestamp)}</span>
-        </div>
-        <h2>${escapeHtml(a.title)}</h2>
-        ${a.desc ? `<p>${escapeHtml(a.desc)}</p>` : ''}
+        ${metaHtml(a)}
+        <h2 class="article-title">${escapeHtml(a.title)}</h2>
+        ${a.desc ? `<p class="article-desc">${escapeHtml(a.desc)}</p>` : ''}
       </div>
     </a>
   `;
 }
 
 function renderArticleStandard(a) {
+  const isSaved = !!savedMap[a.link];
+  const isRead  = readSet.has(a.link);
   return `
-    <a class="article standard" href="${escapeAttr(a.link)}" target="_blank" rel="noopener">
+    <a class="article standard ${isRead ? 'read' : ''}" href="${escapeAttr(a.link)}" target="_blank" rel="noopener" data-link="${escapeAttr(a.link)}">
+      <button class="bookmark-btn ${isSaved ? 'saved' : ''}" data-action="save" data-link="${escapeAttr(a.link)}" aria-label="${isSaved ? 'Unsave' : 'Save'}">${bookmarkSvg(isSaved)}</button>
       <div class="body">
-        <div class="meta">
-          <span class="chip" data-cat="${a.category}">${CAT_LABELS[a.category] || ''}</span>
-          <span class="source">${escapeHtml(a.source)}</span>
-          <span class="dot">·</span>
-          <span class="timeago">${timeAgo(a.timestamp)}</span>
-        </div>
-        <h2>${escapeHtml(a.title)}</h2>
-        ${a.desc ? `<p>${escapeHtml(a.desc)}</p>` : ''}
+        ${metaHtml(a)}
+        <h2 class="article-title">${escapeHtml(a.title)}</h2>
+        ${a.desc ? `<p class="article-desc">${escapeHtml(a.desc)}</p>` : ''}
       </div>
-      ${a.image ? `
-        <div class="thumb">
-          <img src="${escapeAttr(a.image)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.parentElement.style.display='none'" />
-        </div>` : `<div class="thumb" style="display:none;"></div>`}
+      ${a.image ? `<div class="thumb"><img src="${escapeAttr(a.image)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.parentElement.style.display='none'" /></div>` : `<div class="thumb" style="display:none;"></div>`}
     </a>
   `;
 }
 
 function renderArticleCompact(a) {
+  const isSaved = !!savedMap[a.link];
+  const isRead  = readSet.has(a.link);
   return `
-    <a class="article compact" href="${escapeAttr(a.link)}" target="_blank" rel="noopener">
-      <div class="meta">
-        <span class="chip" data-cat="${a.category}">${CAT_LABELS[a.category] || ''}</span>
-        <span class="source">${escapeHtml(a.source)}</span>
-        <span class="dot">·</span>
-        <span class="timeago">${timeAgo(a.timestamp)}</span>
-      </div>
-      <h2>${escapeHtml(a.title)}</h2>
-      ${a.desc ? `<p>${escapeHtml(a.desc)}</p>` : ''}
+    <a class="article compact ${isRead ? 'read' : ''}" href="${escapeAttr(a.link)}" target="_blank" rel="noopener" data-link="${escapeAttr(a.link)}">
+      <button class="bookmark-btn ${isSaved ? 'saved' : ''}" data-action="save" data-link="${escapeAttr(a.link)}" aria-label="${isSaved ? 'Unsave' : 'Save'}">${bookmarkSvg(isSaved)}</button>
+      ${metaHtml(a)}
+      <h2 class="article-title">${escapeHtml(a.title)}</h2>
+      ${a.desc ? `<p class="article-desc">${escapeHtml(a.desc)}</p>` : ''}
     </a>
   `;
 }
@@ -364,10 +377,31 @@ function renderArticle(a, variant) {
   return renderArticleCompact(a);
 }
 
-function renderSectionHeader(label, color) {
+function renderSectionHeader(label, color, subtitle) {
   return `
     <div class="section-header">
       <h2><span class="section-dot" style="--section-color:${color}"></span>${label}</h2>
+    </div>
+    ${subtitle ? `<div class="section-sub">${subtitle}</div>` : ''}
+  `;
+}
+
+function renderQuickBrief(items) {
+  if (!items.length) return '';
+  return `
+    <div class="quick-brief">
+      <div class="qb-eyebrow">Today's Brief</div>
+      <div class="qb-title">The three things to know.</div>
+      <ol class="qb-list">
+        ${items.map(a => `
+          <a class="qb-item ${readSet.has(a.link) ? 'read' : ''}" href="${escapeAttr(a.link)}" target="_blank" rel="noopener" data-link="${escapeAttr(a.link)}">
+            <div>
+              <div class="qb-meta">${CAT_LABELS[a.category] || ''} · ${escapeHtml(a.source)} · ${a.readMin} min</div>
+              <h3>${escapeHtml(a.title)}</h3>
+            </div>
+          </a>
+        `).join('')}
+      </ol>
     </div>
   `;
 }
@@ -375,53 +409,83 @@ function renderSectionHeader(label, color) {
 function render() {
   const main = document.getElementById('feed');
 
-  // ---- Single-category view: hero + flowing list ----
-  if (activeCategory !== 'all') {
-    const list = articles.filter(a => a.category === activeCategory);
-    if (!list.length) {
-      main.innerHTML = `<div class="state">No stories yet. Tap ↻ to refresh.</div>`;
+  // ---- Saved tab ----
+  if (activeCategory === 'saved') {
+    const saved = Object.values(savedMap).sort((a,b) => (b.savedAt||0) - (a.savedAt||0));
+    if (!saved.length) {
+      main.innerHTML = `
+        <div class="state">
+          <div class="state-icon">
+            <svg width="20" height="22" viewBox="0 0 14 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 1.5A1.5 1.5 0 0 1 3.5 0h7A1.5 1.5 0 0 1 12 1.5V15.5L7 12.5L2 15.5V1.5Z"/></svg>
+          </div>
+          <div class="state-title">Saved for later</div>
+          <div>Tap the bookmark on any story to keep it here.</div>
+        </div>`;
       return;
     }
+    main.innerHTML = saved.map(a => renderArticle(a)).join('');
+    return;
+  }
+
+  // ---- Single-category view ----
+  if (activeCategory !== 'all') {
+    const list = articles.filter(a => a.category === activeCategory);
+    if (!list.length) { main.innerHTML = `<div class="state">No stories yet. Pull to refresh.</div>`; return; }
     const hero = list.find(a => a.image) || list[0];
     const rest = list.filter(a => a !== hero).slice(0, 60);
-    main.innerHTML =
-      renderArticle(hero, 'hero') +
-      rest.map(a => renderArticle(a)).join('');
+    main.innerHTML = renderArticle(hero, 'hero') + rest.map(a => renderArticle(a)).join('');
     return;
   }
 
-  // ---- For You: hero + Top Stories + per-category sections ----
+  // ---- For You ----
   const curated = curatedForYou(articles);
-  if (!curated.length) {
-    main.innerHTML = `<div class="state">No stories yet. Tap ↻ to refresh.</div>`;
-    return;
-  }
-  // Hero = best curated item (with image preferred)
-  const hero = curated.find(a => a.image) || curated[0];
-  const heroSet = new Set([hero.link]);
+  if (!curated.length) { main.innerHTML = `<div class="state">No stories yet. Pull to refresh.</div>`; return; }
 
-  // Top Stories: next 5 from the curated list
-  const topStories = curated.filter(a => !heroSet.has(a.link)).slice(0, 6);
-  topStories.forEach(a => heroSet.add(a.link));
+  const used = new Set();
+  // Quick Brief: top 3 unique top-ranked items
+  const brief = [];
+  for (const a of curated) { if (brief.length >= 3) break; brief.push(a); used.add(a.link); }
 
-  // Per-section: pull 4-5 per category, freshest first, skipping already-shown items
+  // Hero: best curated item with image (not in brief)
+  const heroCandidate = curated.find(a => a.image && !used.has(a.link)) || curated.find(a => !used.has(a.link)) || curated[0];
+  used.add(heroCandidate.link);
+
+  // Top Stories: next 5
+  const topStories = curated.filter(a => !used.has(a.link)).slice(0, 5);
+  topStories.forEach(a => used.add(a.link));
+
+  // For Your Practice — combine founders + legal-tech (Brooke's work context)
+  const practiceItems = articles
+    .filter(a => (a.category === 'founders' || a.category === 'legal-tech') && !used.has(a.link))
+    .sort((x,y) => y.timestamp - x.timestamp)
+    .slice(0, 4);
+  practiceItems.forEach(a => used.add(a.link));
+
+  // Per-category sections
   const sectionsHtml = SECTION_ORDER.map(cat => {
     const items = articles
-      .filter(a => a.category === cat && !heroSet.has(a.link))
+      .filter(a => a.category === cat && !used.has(a.link))
       .sort((x, y) => y.timestamp - x.timestamp)
       .slice(0, 4);
     if (!items.length) return '';
-    items.forEach(a => heroSet.add(a.link));
+    items.forEach(a => used.add(a.link));
     return renderSectionHeader(CAT_LABELS[cat], CAT_COLOR[cat]) +
            items.map(a => renderArticle(a)).join('');
   }).join('');
 
   main.innerHTML =
-    renderArticle(hero, 'hero') +
+    renderQuickBrief(brief) +
+    renderArticle(heroCandidate, 'hero') +
     renderSectionHeader('Top Stories', 'var(--fg)') +
     topStories.map(a => renderArticle(a)).join('') +
+    (practiceItems.length
+      ? renderSectionHeader('For Your Practice', 'var(--gold)', 'Founders &amp; legal tech, curated for For Founders Law.') +
+        practiceItems.map(a => renderArticle(a)).join('')
+      : '') +
     sectionsHtml;
 }
+
+// ============ greeting ============
 
 function timeOfDayGreeting() {
   const h = new Date().getHours();
@@ -431,19 +495,40 @@ function timeOfDayGreeting() {
   if (h < 21) return 'Good evening';
   return 'Tonight';
 }
+function dayPrefix() {
+  const d = new Date();
+  const day = d.getDay();   // 0 Sun
+  const h = d.getHours();
+  if (day === 0) return 'Happy Sunday';
+  if (day === 6) return 'Happy Saturday';
+  if (day === 5 && h >= 16) return 'TGIF';
+  if (day === 1 && h < 12) return 'Monday morning';
+  return null;
+}
 function updateGreeting(ts) {
   const greet = document.getElementById('greeting');
   const sub   = document.getElementById('subtitle');
   const eye   = document.getElementById('eyebrow');
-  if (eye) eye.textContent = activeCategory === 'all' ? 'Today' : CAT_LABELS[activeCategory] || 'Today';
-  if (greet) greet.textContent = activeCategory === 'all'
-    ? `${timeOfDayGreeting()}, Brooke`
-    : (CAT_LABELS[activeCategory] || 'News');
+  const prefix = dayPrefix();
+  if (eye) eye.textContent = activeCategory === 'all'
+    ? (prefix ? prefix : 'Today')
+    : (activeCategory === 'saved' ? 'Library' : CAT_LABELS[activeCategory] || 'Today');
+  if (greet) {
+    if (activeCategory === 'saved') greet.textContent = 'Saved for later';
+    else if (activeCategory === 'all') greet.textContent = `${timeOfDayGreeting()}, Brooke`;
+    else greet.textContent = CAT_LABELS[activeCategory] || 'News';
+  }
   if (sub) {
     const dateStr = new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
     const updated = ts ? ` · updated ${timeAgo(ts)}` : '';
-    sub.textContent = `${dateStr}${updated}`;
+    let newCountHtml = '';
+    if (ts && activeCategory === 'all') {
+      const fresh = articles.filter(a => a.timestamp > lastSeenAt).length;
+      if (fresh > 0) newCountHtml = `<span class="new-count">${fresh} new</span>`;
+    }
+    sub.innerHTML = `${dateStr}${updated}${newCountHtml}`;
   }
+  updateSettingsCounts();
 }
 
 function timeAgo(ts) {
@@ -461,6 +546,16 @@ function escapeHtml(s) {
 }
 function escapeAttr(s) { return escapeHtml(s); }
 
+function updateSettingsCounts() {
+  const unreadEl = document.getElementById('unread-count');
+  const savedEl  = document.getElementById('saved-count');
+  if (unreadEl) {
+    const unread = articles.filter(a => !readSet.has(a.link)).length;
+    unreadEl.textContent = `${unread} unread`;
+  }
+  if (savedEl) savedEl.textContent = `${Object.keys(savedMap).length}`;
+}
+
 // ============ events ============
 
 document.getElementById('tabs').addEventListener('click', e => {
@@ -469,183 +564,43 @@ document.getElementById('tabs').addEventListener('click', e => {
   document.querySelectorAll('.seg').forEach(t => t.classList.remove('active'));
   btn.classList.add('active');
   activeCategory = btn.dataset.cat;
+  bumpLastSeen(); lastSeenAt = Date.now();
   updateGreeting(readCache()?.fetchedAt);
   render();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 });
 
+// Mark articles read on click and toggle bookmarks
+document.getElementById('feed').addEventListener('click', (e) => {
+  const bm = e.target.closest('[data-action="save"]');
+  if (bm) {
+    e.preventDefault(); e.stopPropagation();
+    const link = bm.dataset.link;
+    const art = articles.find(a => a.link === link) || savedMap[link];
+    if (!art) return;
+    if (savedMap[link]) { delete savedMap[link]; }
+    else { savedMap[link] = { ...art, savedAt: Date.now() }; }
+    persistSaved();
+    render();
+    return;
+  }
+  const a = e.target.closest('[data-link]');
+  if (a && a.dataset.link) {
+    if (!readSet.has(a.dataset.link)) {
+      readSet.add(a.dataset.link);
+      saveRead();
+    }
+  }
+});
+
 const refreshBtn = document.getElementById('refresh-btn-top');
 if (refreshBtn) {
   refreshBtn.addEventListener('click', async () => {
-    refreshBtn.disabled = true;
-    refreshBtn.classList.add('spin');
+    refreshBtn.disabled = true; refreshBtn.classList.add('spin');
     try { await loadAll(true); }
-    finally {
-      refreshBtn.disabled = false;
-      refreshBtn.classList.remove('spin');
-    }
+    finally { refreshBtn.disabled = false; refreshBtn.classList.remove('spin'); }
   });
 }
-
-// ============ Jennifer — AI chat assistant ============
-const JENNIFER_KEY = 'n4b.jennifer.chat.v1';
-
-const jenniferFab       = document.getElementById('jennifer-fab');
-const jenniferBackdrop  = document.getElementById('jennifer-backdrop');
-const jenniferSheet     = document.getElementById('jennifer-sheet');
-const jenniferClose     = document.getElementById('jennifer-close');
-const jenniferMessages  = document.getElementById('jennifer-messages');
-const jenniferForm      = document.getElementById('jennifer-form');
-const jenniferInput     = document.getElementById('jennifer-input');
-const jenniferSend      = document.getElementById('jennifer-send');
-const jenniferSuggest   = document.getElementById('jennifer-suggestions');
-
-function loadChat() {
-  try {
-    const raw = localStorage.getItem(JENNIFER_KEY);
-    if (!raw) return [];
-    return JSON.parse(raw);
-  } catch { return []; }
-}
-function saveChat(msgs) {
-  try { localStorage.setItem(JENNIFER_KEY, JSON.stringify(msgs.slice(-40))); } catch {}
-}
-let chatMessages = loadChat();
-
-function renderChat() {
-  jenniferMessages.innerHTML = '';
-  if (!chatMessages.length) {
-    jenniferMessages.innerHTML = `
-      <div class="jennifer-greeting">
-        <div class="hi">Hi Brooke, I'm Jennifer ✨</div>
-        <div class="pitch">I'm caught up on everything in your news feed — founders, AI, legal tech, markets, style, pop culture, and world events. Ask me anything.</div>
-      </div>`;
-    return;
-  }
-  for (const m of chatMessages) {
-    const el = document.createElement('div');
-    el.className = `msg ${m.role}${m.error ? ' error' : ''}`;
-    el.textContent = m.content;
-    jenniferMessages.appendChild(el);
-  }
-  jenniferMessages.scrollTop = jenniferMessages.scrollHeight;
-}
-
-function showTyping() {
-  const t = document.createElement('div');
-  t.className = 'msg-typing';
-  t.id = 'jennifer-typing';
-  t.innerHTML = '<span></span><span></span><span></span>';
-  jenniferMessages.appendChild(t);
-  jenniferMessages.scrollTop = jenniferMessages.scrollHeight;
-}
-function hideTyping() {
-  const t = document.getElementById('jennifer-typing');
-  if (t) t.remove();
-}
-
-function newsContextForJennifer() {
-  // Pull the top recent headlines across categories — keep prompt small
-  const cached = readCache();
-  if (!cached || !cached.articles) return '';
-  const byCat = {};
-  for (const a of cached.articles) {
-    byCat[a.category] = byCat[a.category] || [];
-    if (byCat[a.category].length < 8) byCat[a.category].push(a);
-  }
-  let context = '';
-  for (const [cat, arts] of Object.entries(byCat)) {
-    context += `\n## ${CAT_LABELS[cat] || cat}\n`;
-    for (const a of arts) {
-      const when = timeAgo(a.timestamp);
-      context += `- [${a.source} · ${when}] ${a.title}${a.desc ? ' — ' + a.desc.slice(0, 160) : ''}\n`;
-    }
-  }
-  return context.slice(0, 12000); // bound prompt size
-}
-
-async function askJennifer(question) {
-  chatMessages.push({ role: 'user', content: question });
-  saveChat(chatMessages);
-  renderChat();
-  showTyping();
-
-  // Send last 10 turns + news context
-  const apiMessages = chatMessages.slice(-10).map(m => ({
-    role: m.role === 'assistant' ? 'assistant' : 'user',
-    content: m.content,
-  }));
-
-  try {
-    const res = await fetch('/api/jennifer', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        messages: apiMessages,
-        context: newsContextForJennifer(),
-      }),
-    });
-    const data = await res.json();
-    hideTyping();
-    if (!res.ok || data.error) {
-      chatMessages.push({ role: 'assistant', content: data.error || 'Sorry, something went wrong.', error: true });
-    } else {
-      chatMessages.push({ role: 'assistant', content: data.reply || '...' });
-    }
-  } catch (e) {
-    hideTyping();
-    chatMessages.push({ role: 'assistant', content: 'I had trouble reaching the server. Try again in a moment.', error: true });
-  }
-  saveChat(chatMessages);
-  renderChat();
-}
-
-function openJennifer() {
-  renderChat();
-  jenniferSheet.classList.add('open');
-  jenniferBackdrop.classList.add('open');
-  document.body.classList.add('jennifer-open');
-  setTimeout(() => jenniferInput && jenniferInput.focus(), 320);
-}
-function closeJennifer() {
-  jenniferSheet.classList.remove('open');
-  jenniferBackdrop.classList.remove('open');
-  document.body.classList.remove('jennifer-open');
-}
-jenniferFab?.addEventListener('click', openJennifer);
-jenniferClose?.addEventListener('click', closeJennifer);
-jenniferBackdrop?.addEventListener('click', closeJennifer);
-
-// Auto-grow textarea
-jenniferInput?.addEventListener('input', () => {
-  jenniferInput.style.height = 'auto';
-  jenniferInput.style.height = Math.min(jenniferInput.scrollHeight, 140) + 'px';
-});
-
-// Cmd/Ctrl-Enter to send; Enter on mobile also sends
-jenniferInput?.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault();
-    jenniferForm.requestSubmit();
-  }
-});
-
-jenniferForm?.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const q = (jenniferInput.value || '').trim();
-  if (!q) return;
-  jenniferInput.value = '';
-  jenniferInput.style.height = 'auto';
-  jenniferSend.disabled = true;
-  try { await askJennifer(q); }
-  finally { jenniferSend.disabled = false; }
-});
-
-jenniferSuggest?.addEventListener('click', (e) => {
-  const btn = e.target.closest('.suggestion');
-  if (!btn) return;
-  askJennifer(btn.dataset.q);
-});
 
 setInterval(() => {
   const cached = readCache();
@@ -671,9 +626,50 @@ window.addEventListener('focus',   () => loadAll(true).catch(() => {}));
 window.addEventListener('pageshow',() => loadAll(true).catch(() => {}));
 window.addEventListener('online',  () => loadAll(true).catch(() => {}));
 
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('service-worker.js').catch(() => {});
-}
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('service-worker.js').catch(() => {});
 
+// ============ Settings sheet ============
+const settingsFab      = document.getElementById('settings-fab');
+const sheetBackdrop    = document.getElementById('sheet-backdrop');
+const settingsSheet    = document.getElementById('settings-sheet');
+const settingsClose    = document.getElementById('settings-close');
+
+function openSheet()  { settingsSheet.classList.add('open');  sheetBackdrop.classList.add('open'); document.body.style.overflow='hidden'; updateSettingsCounts(); }
+function closeSheet() { settingsSheet.classList.remove('open'); sheetBackdrop.classList.remove('open'); document.body.style.overflow=''; }
+settingsFab.addEventListener('click', openSheet);
+settingsClose.addEventListener('click', closeSheet);
+sheetBackdrop.addEventListener('click', closeSheet);
+
+document.getElementById('setting-mark-read').addEventListener('click', () => {
+  for (const a of articles) readSet.add(a.link);
+  saveRead(); render(); updateSettingsCounts();
+});
+document.getElementById('setting-clear-read').addEventListener('click', () => {
+  readSet = new Set(); saveRead(); render(); updateSettingsCounts();
+});
+document.getElementById('setting-view-saved').addEventListener('click', () => {
+  document.querySelectorAll('.seg').forEach(t => t.classList.toggle('active', t.dataset.cat === 'saved'));
+  activeCategory = 'saved';
+  closeSheet(); updateGreeting(readCache()?.fetchedAt); render();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+});
+document.getElementById('setting-clear-saved').addEventListener('click', () => {
+  savedMap = {}; persistSaved(); render(); updateSettingsCounts();
+});
+document.getElementById('setting-refresh-now').addEventListener('click', async () => { closeSheet(); await loadAll(true); });
+document.getElementById('setting-clear-cache').addEventListener('click', async () => {
+  try {
+    const regs = await navigator.serviceWorker.getRegistrations(); for (const r of regs) await r.unregister();
+    for (const n of await caches.keys()) await caches.delete(n);
+  } catch {}
+  localStorage.removeItem(CACHE_KEY);
+  location.reload();
+});
+
+// ============ boot ============
+readSet  = loadRead();
+savedMap = loadSaved();
+lastSeenAt = loadLastSeen() || Date.now();
+bumpLastSeen();
 updateGreeting(null);
 loadAll(false);

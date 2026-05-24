@@ -6,8 +6,3 @@
   from = "/api/proxy"
   to = "/.netlify/functions/proxy"
   status = 200
-
-[[redirects]]
-  from = "/api/jennifer"
-  to = "/.netlify/functions/jennifer"
-  status = 200
