@@ -1,5 +1,5 @@
 // News4Brooke — personal news PWA, curated for Brooke
-// Pulls RSS via free CORS proxies, parses in-browser, caches in localStorage.
+// Live RSS via our own Netlify Function (no rate limits) + public fallbacks.
 
 const FEEDS = {
   'founders': [
@@ -9,20 +9,47 @@ const FEEDS = {
     { name: 'VC News',               url: 'https://news.google.com/rss/search?q=venture+capital+OR+startup+funding+when:2d&hl=en-US&gl=US&ceid=US:en' },
     { name: 'Founder Law',           url: 'https://news.google.com/rss/search?q=%22startup+law%22+OR+%22cap+table%22+OR+%22SAFE+note%22+OR+%22founder+agreement%22+when:7d&hl=en-US&gl=US&ceid=US:en' },
   ],
+  'ai': [
+    { name: 'TechCrunch · AI',       url: 'https://techcrunch.com/category/artificial-intelligence/feed/' },
+    { name: 'MIT Tech Review',       url: 'https://www.technologyreview.com/feed/' },
+    { name: 'Wired · AI',            url: 'https://www.wired.com/feed/tag/ai/latest/rss' },
+    { name: 'Ars Technica',          url: 'https://feeds.arstechnica.com/arstechnica/index/' },
+    { name: 'OpenAI',                url: 'https://openai.com/blog/rss.xml' },
+    { name: 'AI News',               url: 'https://news.google.com/rss/search?q=%22artificial+intelligence%22+(Anthropic+OR+OpenAI+OR+Claude+OR+ChatGPT+OR+Gemini)+when:2d&hl=en-US&gl=US&ceid=US:en' },
+  ],
   'legal-tech': [
     { name: 'Artificial Lawyer',     url: 'https://www.artificiallawyer.com/feed/' },
     { name: 'LawSites',              url: 'https://www.lawnext.com/feed' },
     { name: 'Law360',                url: 'https://www.law360.com/legalindustry/rss' },
   ],
-  'bravo': [
-    { name: 'Reality Tea',           url: 'https://www.realitytea.com/feed/' },
-    { name: 'Reality Blurb',         url: 'https://realityblurb.com/feed/' },
-    { name: 'Bravo Buzz',            url: 'https://news.google.com/rss/search?q=%22Real+Housewives%22+OR+%22Bravo+TV%22+OR+%22Vanderpump%22+OR+%22Below+Deck%22+OR+%22Summer+House%22&hl=en-US&gl=US&ceid=US:en' },
+  'markets': [
+    { name: 'CNBC',                  url: 'https://www.cnbc.com/id/100003114/device/rss/rss.html' },
+    { name: 'Yahoo Finance',         url: 'https://finance.yahoo.com/news/rssindex' },
+    { name: 'WSJ · Markets',         url: 'https://feeds.a.dj.com/rss/RSSMarketsMain.xml' },
+    { name: 'MarketWatch',           url: 'https://feeds.marketwatch.com/marketwatch/topstories/' },
+    { name: 'FT · Markets',          url: 'https://www.ft.com/markets?format=rss' },
+    { name: 'Stock Movers',          url: 'https://news.google.com/rss/search?q=stock+market+OR+S%26P+500+OR+Nasdaq+OR+Dow+when:1d&hl=en-US&gl=US&ceid=US:en' },
+  ],
+  'style': [
+    { name: 'Vogue',                 url: 'https://www.vogue.com/feed/rss' },
+    { name: 'Elle',                  url: 'https://www.elle.com/rss/all.xml/' },
+    { name: 'Harper’s Bazaar',  url: 'https://www.harpersbazaar.com/rss/all.xml/' },
+    { name: 'Business of Fashion',   url: 'https://www.businessoffashion.com/feeds/news' },
+    { name: 'Hypebeast',             url: 'https://hypebeast.com/feed' },
+    { name: 'Hypebae',               url: 'https://hypebae.com/feed' },
+    { name: 'Highsnobiety',          url: 'https://www.highsnobiety.com/feed/' },
+    { name: 'WWD',                   url: 'https://wwd.com/feed/' },
+    { name: 'Allure',                url: 'https://www.allure.com/feed/rss' },
+    { name: 'Glamour',               url: 'https://www.glamour.com/feed/rss' },
+    { name: 'New Drops',             url: 'https://news.google.com/rss/search?q=%22drops%22+OR+%22new+collection%22+OR+%22launches%22+(fashion+OR+beauty+OR+makeup)+when:3d&hl=en-US&gl=US&ceid=US:en' },
   ],
   'pop-culture': [
     { name: 'Variety',               url: 'https://variety.com/feed/' },
     { name: 'Hollywood Reporter',    url: 'https://www.hollywoodreporter.com/feed/' },
     { name: 'Page Six',              url: 'https://pagesix.com/feed/' },
+    { name: 'Reality Tea',           url: 'https://www.realitytea.com/feed/' },
+    { name: 'Reality Blurb',         url: 'https://realityblurb.com/feed/' },
+    { name: 'Bravo Buzz',            url: 'https://news.google.com/rss/search?q=%22Real+Housewives%22+OR+%22Bravo+TV%22+OR+%22Vanderpump%22+OR+%22Below+Deck%22+OR+%22Summer+House%22&hl=en-US&gl=US&ceid=US:en' },
   ],
   'us-news': [
     { name: 'NPR',                   url: 'https://feeds.npr.org/1001/rss.xml' },
@@ -45,17 +72,17 @@ const FEEDS = {
 
 const CAT_LABELS = {
   'founders':    'Founders & VC',
+  'ai':          'AI',
   'legal-tech':  'Legal Tech',
-  'bravo':       'Bravo',
+  'markets':     'Markets',
+  'style':       'Style & Beauty',
   'pop-culture': 'Pop Culture',
   'us-news':     'US',
   'canada-news': 'Canada',
   'israel-iran': 'Israel/Iran',
 };
 
-// CORS proxy chain — tried in order, falls back on failure.
-// Primary: our own Netlify Function (same origin, no rate limits, fast).
-// Fallbacks: public proxies in case the function is down.
+// Same-origin proxy first (no rate limits). Public fallbacks if function is offline.
 const PROXIES = [
   url => `/api/proxy?url=${encodeURIComponent(url)}`,
   url => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
@@ -63,10 +90,10 @@ const PROXIES = [
   url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
 ];
 
-const CACHE_KEY = 'n4b.cache.v3';
-const CACHE_TTL_MS = 90 * 1000;            // 90 seconds — counts as "stale"
-const AUTO_REFRESH_MS = 90 * 1000;         // background re-fetch every 90s while app is open
-const ITEMS_PER_SOURCE = 12;
+const CACHE_KEY = 'n4b.cache.v4';
+const CACHE_TTL_MS = 90 * 1000;           // 90 seconds — counts as "stale"
+const AUTO_REFRESH_MS = 90 * 1000;        // background re-fetch every 90s while open
+const ITEMS_PER_SOURCE = 10;
 
 let activeCategory = 'all';
 let articles = [];
@@ -130,7 +157,7 @@ function buildArticle(title, link, desc, pub, source, category) {
   return {
     title: stripHtml(title),
     link: link.trim(),
-    desc:  stripHtml(desc).slice(0, 280),
+    desc:  stripHtml(desc).slice(0, 240),
     source, category, timestamp,
   };
 }
@@ -161,7 +188,7 @@ async function loadAll(force = false) {
     updateGreeting(cached.fetchedAt);
     if (fresh && !force) return;
   }
-  if (!cached) setLoading();
+  // (skeletons already on first paint from server-rendered HTML)
 
   const tasks = [];
   for (const [cat, sources] of Object.entries(FEEDS)) {
@@ -188,32 +215,33 @@ async function loadAll(force = false) {
 }
 
 // ---------- "For You" curation ----------
-// Personal mix: weight Brooke's primary interests higher and ensure breadth.
 function curatedForYou(all) {
   const weights = {
-    'founders':    1.25,
+    'founders':    1.30,
+    'ai':          1.25,
     'legal-tech':  1.20,
-    'bravo':       1.15,
-    'israel-iran': 1.10,
-    'pop-culture': 1.00,
-    'us-news':     0.95,
+    'markets':     1.15,
+    'style':       1.15,
+    'pop-culture': 1.10,
+    'israel-iran': 1.05,
+    'us-news':     1.00,
     'canada-news': 0.95,
   };
   const now = Date.now();
   const scored = all.map(a => {
     const ageHrs = Math.max(0.5, (now - a.timestamp) / 3.6e6);
-    const recency = 1 / Math.pow(ageHrs, 0.55); // decay
+    const recency = 1 / Math.pow(ageHrs, 0.55);
     const w = weights[a.category] || 1;
     return { ...a, _score: recency * w };
   }).sort((x, y) => y._score - x._score);
 
-  // round-robin-ish — make sure no single category dominates the first ~20
+  // round-robin: no single category dominates the first ~30
   const counts = {};
   const picked = [];
   const rest = [];
   for (const a of scored) {
     counts[a.category] = counts[a.category] || 0;
-    if (picked.length < 30 && counts[a.category] < 4) {
+    if (picked.length < 32 && counts[a.category] < 4) {
       counts[a.category]++;
       picked.push(a);
     } else {
@@ -236,13 +264,8 @@ function render() {
   if (!list.length) {
     main.innerHTML = `
       <div class="state">
-        <div class="state-icon">
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/>
-          </svg>
-        </div>
-        <div class="state-title">No stories yet</div>
-        <div class="state-body">Tap ↻ at the top right to fetch the latest.</div>
+        <div class="state-title">Nothing here yet</div>
+        <div class="state-body">Tap ↻ above to fetch the latest.</div>
       </div>`;
     return;
   }
@@ -254,21 +277,13 @@ function render() {
         <span class="chip" data-cat="${a.category}">${CAT_LABELS[a.category]}</span>
         <span class="source">${escapeHtml(a.source)}</span>
         <span class="dot">·</span>
-        <span>${timeAgo(a.timestamp)}</span>
+        <span class="timeago">${timeAgo(a.timestamp)}</span>
       </div>
       <h2>${escapeHtml(a.title)}</h2>
       ${a.desc ? `<p>${escapeHtml(a.desc)}</p>` : ''}
     </a>
   `).join('');
   main.innerHTML = html;
-}
-
-function setLoading() {
-  document.getElementById('feed').innerHTML = `
-    <div class="state">
-      <div class="spinner"></div>
-      <div class="state-body">Gathering today's headlines for you…</div>
-    </div>`;
 }
 
 function timeOfDayGreeting() {
@@ -282,10 +297,12 @@ function timeOfDayGreeting() {
 function updateGreeting(ts) {
   const greet = document.getElementById('greeting');
   const sub   = document.getElementById('subtitle');
-  greet.textContent = `${timeOfDayGreeting()}, Brooke`;
-  const dateStr = new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
-  const updated = ts ? ` · updated ${timeAgo(ts)}` : '';
-  sub.textContent = `${dateStr}${updated}`;
+  if (greet) greet.textContent = `${timeOfDayGreeting()}, Brooke`;
+  if (sub) {
+    const dateStr = new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
+    const updated = ts ? ` · updated ${timeAgo(ts)}` : '';
+    sub.textContent = `${dateStr}${updated}`;
+  }
 }
 
 function timeAgo(ts) {
@@ -326,14 +343,12 @@ refreshBtn.addEventListener('click', async () => {
   }
 });
 
-// Re-render relative timestamps every 30 seconds
 setInterval(() => {
   const cached = readCache();
   if (cached) updateGreeting(cached.fetchedAt);
 }, 30_000);
 
 // ---------- aggressive auto-refresh ----------
-// 1) background timer: pull every AUTO_REFRESH_MS (90s) while app is open
 let autoTimer = null;
 function startAutoRefresh() {
   if (autoTimer) return;
@@ -348,28 +363,17 @@ function stopAutoRefresh() {
 }
 startAutoRefresh();
 
-// 2) refresh the instant the app comes to the foreground (tab focused, app re-opened)
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible') loadAll(true).catch(() => {});
+  if (document.visibilityState === 'visible') { loadAll(true).catch(() => {}); startAutoRefresh(); }
+  else { stopAutoRefresh(); }
 });
-window.addEventListener('focus', () => loadAll(true).catch(() => {}));
-window.addEventListener('pageshow', () => loadAll(true).catch(() => {}));
+window.addEventListener('focus',   () => loadAll(true).catch(() => {}));
+window.addEventListener('pageshow',() => loadAll(true).catch(() => {}));
+window.addEventListener('online',  () => loadAll(true).catch(() => {}));
 
-// 3) refresh when network comes back online
-window.addEventListener('online', () => loadAll(true).catch(() => {}));
-
-// 4) save battery: pause timer when tab is hidden, resume when visible
-document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'hidden') stopAutoRefresh();
-  else startAutoRefresh();
-});
-
-// Service worker registration (for installability + offline)
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('service-worker.js').catch(() => {});
 }
 
-// Show greeting immediately, even before data arrives
 updateGreeting(null);
-// Kickoff
 loadAll(false);
