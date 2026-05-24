@@ -1,7 +1,7 @@
 // Brief — service worker
 // Caches app shell so the PWA opens instantly and works offline (showing cached articles).
 
-const CACHE = 'brief-shell-v1';
+const CACHE = 'n4b-shell-v3';
 const SHELL = [
   './',
   './index.html',

@@ -14,38 +14,34 @@
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png" />
 <link rel="icon" type="image/png" sizes="512x512" href="icon-512.png" />
 <style>
-  /* ---------- Refined design tokens (iOS / Apple-store inspired) ---------- */
+  /* ============ Editorial design system ============ */
   :root {
-    /* Surfaces — true black + tightly graded elevation */
     --bg:            #000000;
-    --bg-elev-1:     #0d0d0f;
-    --bg-elev-2:     #15151a;
-    --bg-elev-3:     #1f1f25;
+    --bg-elev-1:     #0b0b0d;
+    --bg-elev-2:     #131318;
+    --bg-elev-3:     #1c1c22;
     --hairline:      rgba(255,255,255,0.06);
     --hairline-2:    rgba(255,255,255,0.10);
 
-    /* Text — Apple's labelPrimary/Secondary/Tertiary */
-    --fg:            #f5f5f7;
+    --fg:            #f7f7f9;
     --fg-2:          rgba(235,235,245,0.62);
-    --fg-3:          rgba(235,235,245,0.32);
+    --fg-3:          rgba(235,235,245,0.34);
 
-    /* Accent — single restrained tint */
     --tint:          #0a84ff;
 
-    /* Category accents — desaturated, sophisticated palette */
-    --c-founders:   #d4af6a;  /* warm gold */
-    --c-ai:         #a78bfa;  /* soft violet */
-    --c-legal:      #67c9c1;  /* sage teal */
-    --c-markets:    #5ec27a;  /* refined green */
-    --c-style:      #e88aa5;  /* dusty rose */
-    --c-pop:        #e8a572;  /* muted amber */
-    --c-us:         #8ba9d9;  /* slate blue */
-    --c-canada:     #d88a8a;  /* muted red */
-    --c-israel:     #b89dd6;  /* lavender */
+    --c-founders:   #d4af6a;
+    --c-ai:         #a78bfa;
+    --c-legal:      #67c9c1;
+    --c-markets:    #5ec27a;
+    --c-style:      #e88aa5;
+    --c-pop:        #e8a572;
+    --c-us:         #8ba9d9;
+    --c-canada:     #d88a8a;
+    --c-israel:     #b89dd6;
 
-    --r-card:    20px;
+    --r-card:    22px;
+    --r-thumb:   14px;
     --r-chip:    999px;
-    --safe-top:  env(safe-area-inset-top);
   }
   @media (prefers-color-scheme: light) {
     :root {
@@ -67,8 +63,7 @@
     background: var(--bg);
     color: var(--fg);
     font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Inter", system-ui, sans-serif;
-    font-size: 17px;
-    line-height: 1.45;
+    font-size: 17px; line-height: 1.45;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
@@ -78,29 +73,21 @@
   }
   body {
     min-height: 100vh;
-    padding: var(--safe-top) 0 calc(env(safe-area-inset-bottom) + 56px);
+    padding: env(safe-area-inset-top) 0 calc(env(safe-area-inset-bottom) + 56px);
   }
 
-  /* ---------- Glass header ---------- */
+  /* ============ Glass header ============ */
   header {
-    position: sticky; top: 0; z-index: 20;
-    background: color-mix(in srgb, var(--bg) 70%, transparent);
-    -webkit-backdrop-filter: saturate(180%) blur(32px);
-    backdrop-filter: saturate(180%) blur(32px);
+    position: sticky; top: 0; z-index: 30;
+    background: color-mix(in srgb, var(--bg) 68%, transparent);
+    -webkit-backdrop-filter: saturate(180%) blur(34px);
+    backdrop-filter: saturate(180%) blur(34px);
     border-bottom: 0.5px solid transparent;
     transition: border-color 0.2s ease;
   }
   body.scrolled header { border-bottom-color: var(--hairline); }
-
-  .header-inner {
-    max-width: 720px;
-    margin: 0 auto;
-    padding: 6px 22px 12px;
-  }
-  .nav-row {
-    display: flex; align-items: center; justify-content: space-between;
-    min-height: 44px;
-  }
+  .header-inner { max-width: 720px; margin: 0 auto; padding: 6px 22px 14px; }
+  .nav-row { display: flex; align-items: center; justify-content: space-between; min-height: 44px; }
   .nav-title {
     font-size: 16px; font-weight: 600; letter-spacing: -0.022em;
     opacity: 0; transform: translateY(4px);
@@ -108,16 +95,16 @@
     pointer-events: none;
   }
   body.scrolled .nav-title { opacity: 1; transform: translateY(0); }
+  .header-actions { display:flex; align-items:center; gap: 10px; }
 
   .live-pill {
     display: inline-flex; align-items: center; gap: 6px;
     padding: 4px 10px 4px 8px;
     border-radius: 999px;
-    background: rgba(48, 209, 88, 0.12);
+    background: rgba(94, 194, 122, 0.13);
     color: #5ec27a;
     font-size: 11px; font-weight: 600;
-    letter-spacing: 0.02em;
-    text-transform: uppercase;
+    letter-spacing: 0.02em; text-transform: uppercase;
   }
   .live-dot {
     width: 6px; height: 6px; border-radius: 50%;
@@ -132,10 +119,9 @@
 
   .icon-btn {
     appearance: none; -webkit-appearance: none;
-    background: var(--bg-elev-3);
-    color: var(--fg);
+    background: var(--bg-elev-3); color: var(--fg);
     border: none;
-    width: 34px; height: 34px;
+    width: 36px; height: 36px;
     border-radius: 50%;
     display: inline-flex; align-items: center; justify-content: center;
     cursor: pointer;
@@ -147,20 +133,24 @@
   .icon-btn.spin svg { animation: spin 0.9s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
 
-  .large-title {
-    font-size: 34px; font-weight: 700; letter-spacing: -0.028em;
+  .eyebrow {
+    font-size: 11px; font-weight: 600; letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--fg-3);
     margin: 4px 0 2px;
-    line-height: 1.04;
+  }
+  .large-title {
+    font-size: 36px; font-weight: 700; letter-spacing: -0.030em;
+    margin: 2px 0 2px; line-height: 1.02;
     font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", system-ui, sans-serif;
   }
   .subtitle {
     color: var(--fg-2);
     font-size: 13px; font-weight: 400;
-    margin-bottom: 16px;
+    margin-bottom: 18px;
     letter-spacing: -0.005em;
   }
 
-  /* ---------- Segmented scroll tabs ---------- */
+  /* ============ Segmented tabs ============ */
   .segmented {
     display: flex; gap: 6px; overflow-x: auto;
     margin: 0 -22px; padding: 4px 22px 10px;
@@ -171,8 +161,7 @@
   }
   .segmented::-webkit-scrollbar { display: none; }
   .seg {
-    flex: 0 0 auto;
-    scroll-snap-align: start;
+    flex: 0 0 auto; scroll-snap-align: start;
     appearance: none; -webkit-appearance: none;
     background: var(--bg-elev-2);
     border: 0.5px solid var(--hairline);
@@ -186,59 +175,72 @@
   }
   .seg:active { transform: scale(0.95); }
   .seg.active {
-    background: var(--fg);
-    color: var(--bg);
-    border-color: var(--fg);
-    font-weight: 600;
+    background: var(--fg); color: var(--bg);
+    border-color: var(--fg); font-weight: 600;
   }
 
-  /* ---------- Main feed ---------- */
+  /* ============ Main feed ============ */
   main {
     max-width: 720px;
     margin: 0 auto;
-    padding: 14px 16px 60px;
+    padding: 6px 16px 60px;
   }
 
+  /* Section headers — like Apple News section dividers */
+  .section-header {
+    display: flex; align-items: baseline; justify-content: space-between;
+    margin: 26px 4px 12px;
+    padding-top: 6px;
+  }
+  .section-header:first-child { margin-top: 6px; }
+  .section-header h2 {
+    margin: 0;
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.024em;
+    color: var(--fg);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", system-ui, sans-serif;
+  }
+  .section-header h2 .section-dot {
+    display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+    background: var(--section-color, var(--tint));
+    margin-right: 10px; vertical-align: middle;
+    transform: translateY(-2px);
+    box-shadow: 0 0 12px var(--section-color, var(--tint));
+    opacity: 0.9;
+  }
+  .section-header .see-more {
+    font-size: 13px; font-weight: 500; color: var(--fg-3);
+  }
+
+  /* ---------- Article — base ---------- */
   .article {
     position: relative;
     display: block; text-decoration: none; color: inherit;
-    background: var(--bg-elev-1);
-    border: 0.5px solid var(--hairline);
-    border-radius: var(--r-card);
-    padding: 18px 18px 16px;
-    margin-bottom: 10px;
     transition: transform 0.18s ease, background 0.18s ease, border-color 0.18s ease;
     will-change: transform;
+    animation: rise 0.55s cubic-bezier(0.16, 1, 0.3, 1) both;
   }
-  .article:active {
-    transform: scale(0.985);
-    background: var(--bg-elev-2);
-    border-color: var(--hairline-2);
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
   }
+  .article:active { transform: scale(0.985); }
 
-  .meta {
-    display: flex; align-items: center; gap: 8px;
-    margin-bottom: 8px;
-    font-size: 11.5px; color: var(--fg-3);
-    letter-spacing: 0.01em;
-    font-variant-numeric: tabular-nums;
-  }
   .chip {
-    display: inline-flex; align-items: center; gap: 5px;
-    padding: 2px 0;
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 0;
     color: var(--chip-color, var(--tint));
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.04em;
+    font-size: 11px; font-weight: 700;
+    letter-spacing: 0.10em;
     text-transform: uppercase;
   }
   .chip::before {
     content: "";
-    width: 5px; height: 5px;
-    border-radius: 50%;
+    width: 5px; height: 5px; border-radius: 50%;
     background: var(--chip-color, var(--tint));
     box-shadow: 0 0 8px var(--chip-color, var(--tint));
-    opacity: 0.85;
+    opacity: 0.9;
   }
   .chip[data-cat="founders"]    { --chip-color: var(--c-founders); }
   .chip[data-cat="ai"]          { --chip-color: var(--c-ai); }
@@ -251,71 +253,126 @@
   .chip[data-cat="israel-iran"] { --chip-color: var(--c-israel); }
 
   .source { font-weight: 500; color: var(--fg-2); text-transform: none; letter-spacing: -0.005em; font-size: 12px; }
-  .dot   { color: var(--fg-3); }
-  .timeago { color: var(--fg-3); font-size: 12px; }
+  .dot    { color: var(--fg-3); }
+  .timeago{ color: var(--fg-3); font-size: 12px; font-variant-numeric: tabular-nums; }
 
-  .article h2 {
-    margin: 0 0 6px;
-    font-size: 17px;
-    font-weight: 600;
-    letter-spacing: -0.022em;
-    line-height: 1.28;
-    color: var(--fg);
+  .meta {
+    display: flex; align-items: center; flex-wrap: wrap; gap: 8px;
+    margin-bottom: 9px;
+  }
+
+  /* ---------- HERO card with full-bleed cover ---------- */
+  .article.hero {
+    background: var(--bg-elev-1);
+    border: 0.5px solid var(--hairline);
+    border-radius: var(--r-card);
+    overflow: hidden;
+    margin-bottom: 16px;
+  }
+  .article.hero .cover {
+    position: relative;
+    width: 100%; aspect-ratio: 16 / 10;
+    background: var(--bg-elev-3);
+    overflow: hidden;
+  }
+  .article.hero .cover img {
+    width: 100%; height: 100%;
+    object-fit: cover; display: block;
+    transition: transform 0.6s ease;
+  }
+  .article.hero:active .cover img { transform: scale(1.02); }
+  .article.hero .cover-shade {
+    position: absolute; inset: 0;
+    background: linear-gradient(180deg, rgba(0,0,0,0) 40%, rgba(0,0,0,0.55) 100%);
+  }
+  .article.hero .body { padding: 16px 18px 18px; }
+  .article.hero h2 {
+    margin: 0 0 7px;
+    font-size: 22px; line-height: 1.2; letter-spacing: -0.024em;
+    font-weight: 700;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", system-ui, sans-serif;
     display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
     overflow: hidden;
   }
-  .article p {
+  .article.hero p {
     margin: 0;
-    font-size: 14px;
-    line-height: 1.42;
-    color: var(--fg-2);
-    letter-spacing: -0.008em;
+    font-size: 14px; line-height: 1.42; color: var(--fg-2);
     display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
     overflow: hidden;
   }
 
-  /* Featured top story */
-  .article.featured {
-    background:
-      radial-gradient(120% 80% at 0% 0%, rgba(212,175,106,0.07) 0%, transparent 55%),
-      var(--bg-elev-2);
-    border: 0.5px solid var(--hairline-2);
-    padding: 22px 20px 20px;
+  /* ---------- STANDARD card — thumbnail on right ---------- */
+  .article.standard {
+    display: grid;
+    grid-template-columns: 1fr 96px;
+    gap: 14px;
+    padding: 16px 4px;
+    border-bottom: 0.5px solid var(--hairline);
+    align-items: start;
   }
-  .article.featured h2 { font-size: 22px; -webkit-line-clamp: 4; letter-spacing: -0.024em; line-height: 1.22; }
-  .article.featured p  { font-size: 14px; -webkit-line-clamp: 3; }
-
-  /* Section header — for inside-category groups */
-  .section-head {
-    display: flex; align-items: baseline; justify-content: space-between;
-    margin: 22px 4px 10px;
-  }
-  .section-head h3 {
-    margin: 0;
-    font-size: 13px;
+  .article.standard:last-child { border-bottom: none; }
+  .article.standard .body { min-width: 0; }
+  .article.standard h2 {
+    margin: 0 0 6px;
+    font-size: 16px; line-height: 1.3; letter-spacing: -0.019em;
     font-weight: 600;
-    color: var(--fg-3);
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
+    display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+    overflow: hidden;
   }
-  .section-head .count {
-    font-size: 11px; color: var(--fg-3); font-variant-numeric: tabular-nums;
+  .article.standard p {
+    margin: 0;
+    font-size: 13px; line-height: 1.4; color: var(--fg-2);
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .article.standard .thumb {
+    width: 96px; height: 96px;
+    border-radius: var(--r-thumb);
+    background: var(--bg-elev-2);
+    overflow: hidden;
+    flex: 0 0 auto;
+  }
+  .article.standard .thumb img {
+    width: 100%; height: 100%;
+    object-fit: cover; display: block;
   }
 
-  /* States */
-  .state {
-    display: flex; flex-direction: column; align-items: center;
-    justify-content: center; padding: 80px 24px 40px;
-    color: var(--fg-2); text-align: center;
-    gap: 10px;
+  /* ---------- COMPACT — text only, no image ---------- */
+  .article.compact {
+    padding: 14px 4px;
+    border-bottom: 0.5px solid var(--hairline);
   }
-  .skel {
-    display: block;
-    background: var(--bg-elev-1);
-    border: 0.5px solid var(--hairline);
-    border-radius: var(--r-card);
-    padding: 18px;
-    margin-bottom: 10px;
+  .article.compact:last-child { border-bottom: none; }
+  .article.compact h2 {
+    margin: 0 0 5px;
+    font-size: 15.5px; line-height: 1.3; letter-spacing: -0.018em;
+    font-weight: 600;
+    display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .article.compact p {
+    margin: 0;
+    font-size: 13px; line-height: 1.4; color: var(--fg-2);
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  /* ---------- Loading skeletons ---------- */
+  .skel-hero, .skel-row { animation: rise 0.5s ease both; }
+  .skel-hero {
+    background: var(--bg-elev-1); border: 0.5px solid var(--hairline);
+    border-radius: var(--r-card); overflow: hidden; margin-bottom: 16px;
+  }
+  .skel-hero-img {
+    width: 100%; aspect-ratio: 16/10;
+    background: linear-gradient(90deg, var(--bg-elev-2) 25%, var(--bg-elev-3) 50%, var(--bg-elev-2) 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.6s infinite linear;
+  }
+  .skel-hero-body { padding: 16px 18px 18px; }
+  .skel-row {
+    display: grid; grid-template-columns: 1fr 96px; gap: 14px;
+    padding: 16px 4px; border-bottom: 0.5px solid var(--hairline); align-items: start;
   }
   .skel-line {
     height: 12px; border-radius: 4px;
@@ -325,24 +382,25 @@
     margin-bottom: 8px;
   }
   .skel-line.short { width: 35%; height: 9px; margin-bottom: 14px; }
-  .skel-line.title { width: 95%; height: 16px; margin-bottom: 6px; }
-  .skel-line.title-2 { width: 75%; height: 16px; margin-bottom: 12px; }
+  .skel-line.title { width: 95%; height: 16px; }
+  .skel-line.title-2 { width: 70%; height: 16px; margin-bottom: 12px; }
   .skel-line.body { width: 90%; height: 10px; }
-  .skel-line.body-2 { width: 70%; height: 10px; margin-bottom: 0; }
+  .skel-line.body-2 { width: 55%; height: 10px; margin-bottom: 0; }
+  .skel-thumb {
+    width: 96px; height: 96px; border-radius: var(--r-thumb);
+    background: linear-gradient(90deg, var(--bg-elev-2) 25%, var(--bg-elev-3) 50%, var(--bg-elev-2) 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.6s infinite linear;
+  }
   @keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
 
-  /* Stagger-in animation */
-  .article {
-    animation: rise 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
-  }
-  @keyframes rise {
-    from { opacity: 0; transform: translateY(10px); }
-    to   { opacity: 1; transform: translateY(0); }
+  .state {
+    text-align: center; padding: 60px 24px;
+    color: var(--fg-2); font-size: 14px;
   }
 
-  /* Footer */
   footer {
-    text-align: center; padding: 20px 20px 0;
+    text-align: center; padding: 26px 20px 0;
     color: var(--fg-3); font-size: 11px;
     letter-spacing: 0.02em;
   }
@@ -353,17 +411,17 @@
   <div class="header-inner">
     <div class="nav-row">
       <span class="nav-title">News4Brooke</span>
-      <div style="display:flex; align-items:center; gap:10px;">
+      <div class="header-actions">
         <span class="live-pill"><span class="live-dot"></span>Live</span>
         <button class="icon-btn" id="refresh-btn" type="button" aria-label="Refresh">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M21 12a9 9 0 1 1-3.2-6.9"/>
-            <path d="M21 4v5h-5"/>
+            <path d="M21 12a9 9 0 1 1-3.2-6.9"/><path d="M21 4v5h-5"/>
           </svg>
         </button>
       </div>
     </div>
-    <h1 class="large-title" id="greeting">Today</h1>
+    <div class="eyebrow" id="eyebrow">Today</div>
+    <h1 class="large-title" id="greeting">News4Brooke</h1>
     <div class="subtitle" id="subtitle">Curating your headlines…</div>
     <div class="segmented" id="tabs" role="tablist">
       <button class="seg active" data-cat="all" role="tab">For You</button>
@@ -382,27 +440,42 @@
 
 <main>
   <div id="feed">
-    <!-- Skeleton placeholders shown while first load is in flight -->
-    <div class="skel">
-      <div class="skel-line short"></div>
-      <div class="skel-line title"></div>
-      <div class="skel-line title-2"></div>
-      <div class="skel-line body"></div>
-      <div class="skel-line body-2"></div>
+    <div class="skel-hero">
+      <div class="skel-hero-img"></div>
+      <div class="skel-hero-body">
+        <div class="skel-line short"></div>
+        <div class="skel-line title"></div>
+        <div class="skel-line title-2"></div>
+        <div class="skel-line body"></div>
+        <div class="skel-line body-2"></div>
+      </div>
     </div>
-    <div class="skel">
-      <div class="skel-line short"></div>
-      <div class="skel-line title"></div>
-      <div class="skel-line title-2"></div>
-      <div class="skel-line body"></div>
-      <div class="skel-line body-2"></div>
+    <div class="skel-row">
+      <div>
+        <div class="skel-line short"></div>
+        <div class="skel-line title"></div>
+        <div class="skel-line title-2"></div>
+        <div class="skel-line body-2"></div>
+      </div>
+      <div class="skel-thumb"></div>
     </div>
-    <div class="skel">
-      <div class="skel-line short"></div>
-      <div class="skel-line title"></div>
-      <div class="skel-line title-2"></div>
-      <div class="skel-line body"></div>
-      <div class="skel-line body-2"></div>
+    <div class="skel-row">
+      <div>
+        <div class="skel-line short"></div>
+        <div class="skel-line title"></div>
+        <div class="skel-line title-2"></div>
+        <div class="skel-line body-2"></div>
+      </div>
+      <div class="skel-thumb"></div>
+    </div>
+    <div class="skel-row">
+      <div>
+        <div class="skel-line short"></div>
+        <div class="skel-line title"></div>
+        <div class="skel-line title-2"></div>
+        <div class="skel-line body-2"></div>
+      </div>
+      <div class="skel-thumb"></div>
     </div>
   </div>
 </main>
