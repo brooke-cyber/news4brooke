@@ -344,11 +344,11 @@ function metaHtml(a) {
   `;
 }
 
-function renderArticleHero(a) {
+function renderArticleHero(a, idx) {
   const isSaved = !!savedMap[a.link];
   const isRead  = readSet.has(a.link);
   const cls = `article hero ${a.image ? '' : 'no-image'} ${isRead ? 'read' : ''}`;
-  const style = a.image ? '' : `style="--hero-tint:${CAT_COLOR[a.category] || 'var(--tint)'}"`;
+  const style = a.image ? `style="--i:${idx || 0}"` : `style="--hero-tint:${CAT_COLOR[a.category] || 'var(--tint)'};--i:${idx || 0}"`;
   return `
     <a class="${cls}" ${style} href="${escapeAttr(a.link)}" target="_blank" rel="noopener" data-link="${escapeAttr(a.link)}">
       <button class="bookmark-btn ${isSaved ? 'saved' : ''}" data-action="save" data-link="${escapeAttr(a.link)}" aria-label="${isSaved ? 'Unsave' : 'Save'}">${bookmarkSvg(isSaved)}</button>
@@ -362,11 +362,11 @@ function renderArticleHero(a) {
   `;
 }
 
-function renderArticleStandard(a) {
+function renderArticleStandard(a, idx) {
   const isSaved = !!savedMap[a.link];
   const isRead  = readSet.has(a.link);
   return `
-    <a class="article standard ${isRead ? 'read' : ''}" href="${escapeAttr(a.link)}" target="_blank" rel="noopener" data-link="${escapeAttr(a.link)}">
+    <a class="article standard ${isRead ? 'read' : ''}" href="${escapeAttr(a.link)}" target="_blank" rel="noopener" data-link="${escapeAttr(a.link)}" style="--i:${idx || 0}">
       <button class="bookmark-btn ${isSaved ? 'saved' : ''}" data-action="save" data-link="${escapeAttr(a.link)}" aria-label="${isSaved ? 'Unsave' : 'Save'}">${bookmarkSvg(isSaved)}</button>
       <div class="body">
         ${metaHtml(a)}
@@ -378,11 +378,11 @@ function renderArticleStandard(a) {
   `;
 }
 
-function renderArticleCompact(a) {
+function renderArticleCompact(a, idx) {
   const isSaved = !!savedMap[a.link];
   const isRead  = readSet.has(a.link);
   return `
-    <a class="article compact ${isRead ? 'read' : ''}" href="${escapeAttr(a.link)}" target="_blank" rel="noopener" data-link="${escapeAttr(a.link)}">
+    <a class="article compact ${isRead ? 'read' : ''}" href="${escapeAttr(a.link)}" target="_blank" rel="noopener" data-link="${escapeAttr(a.link)}" style="--i:${idx || 0}">
       <button class="bookmark-btn ${isSaved ? 'saved' : ''}" data-action="save" data-link="${escapeAttr(a.link)}" aria-label="${isSaved ? 'Unsave' : 'Save'}">${bookmarkSvg(isSaved)}</button>
       ${metaHtml(a)}
       <h2 class="article-title">${escapeHtml(a.title)}</h2>
@@ -391,10 +391,10 @@ function renderArticleCompact(a) {
   `;
 }
 
-function renderArticle(a, variant) {
-  if (variant === 'hero') return renderArticleHero(a);
-  if (a.image) return renderArticleStandard(a);
-  return renderArticleCompact(a);
+function renderArticle(a, variant, idx) {
+  if (variant === 'hero') return renderArticleHero(a, idx);
+  if (a.image) return renderArticleStandard(a, idx);
+  return renderArticleCompact(a, idx);
 }
 
 function renderSectionHeader(label, color, jumpCat, subtitle) {
@@ -668,7 +668,7 @@ function renderAstrologyView() {
       <!-- News -->
       ${astroArts.length ? `
         <div class="section-header no-jump"><h2><span class="section-dot" style="--section-color:#c0a3e6"></span>Astrology News</h2></div>
-        ${astroArts.map(a => renderArticle(a)).join('')}
+        ${astroArts.map((a, i) => renderArticle(a, null, i)).join('')}
       ` : ''}
     </div>
   `;
@@ -676,11 +676,17 @@ function renderAstrologyView() {
 
 function renderQuickBrief(items) {
   if (!items.length) return '';
+  const h = new Date().getHours();
+  let briefLabel = "Today's Brief";
+  if (h < 5) briefLabel = "Tonight's Brief";
+  else if (h < 12) briefLabel = "Morning Brief";
+  else if (h < 17) briefLabel = "Afternoon Brief";
+  else if (h < 21) briefLabel = "Evening Brief";
   return `
     <div class="quick-brief" data-brief>
-      <div class="qb-eyebrow">Today's Brief</div>
+      <div class="qb-eyebrow">${briefLabel}</div>
       <div class="qb-head">
-        <div class="qb-title">The three things to know.</div>
+        <div class="qb-title">The three things to know</div>
         <button class="qb-listen" id="qb-listen-btn" type="button" aria-label="Listen">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polygon points="6 4 20 12 6 20 6 4" fill="currentColor"/></svg>
           <span>Listen</span>
@@ -739,6 +745,20 @@ function listenToBrief(items) {
 
 function render() {
   const main = document.getElementById('feed');
+  main.style.opacity = '0';
+  main.style.transform = 'translateY(6px)';
+  requestAnimationFrame(() => {
+    main.style.transition = 'none';
+    _renderInner(main);
+    requestAnimationFrame(() => {
+      main.style.transition = 'opacity 0.25s ease, transform 0.25s ease';
+      main.style.opacity = '1';
+      main.style.transform = 'translateY(0)';
+    });
+  });
+}
+
+function _renderInner(main) {
 
   // ---- Astrology (custom view) ----
   if (activeCategory === 'astrology') {
@@ -773,30 +793,30 @@ function render() {
       main.innerHTML = `
         <div class="state">
           <div class="state-icon">
-            <svg width="20" height="22" viewBox="0 0 14 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 1.5A1.5 1.5 0 0 1 3.5 0h7A1.5 1.5 0 0 1 12 1.5V15.5L7 12.5L2 15.5V1.5Z"/></svg>
+            <svg width="22" height="24" viewBox="0 0 14 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 1.5A1.5 1.5 0 0 1 3.5 0h7A1.5 1.5 0 0 1 12 1.5V15.5L7 12.5L2 15.5V1.5Z"/></svg>
           </div>
           <div class="state-title">Saved for later</div>
           <div>Tap the bookmark on any story to keep it here.</div>
         </div>`;
       return;
     }
-    main.innerHTML = saved.map(a => renderArticle(a)).join('');
+    main.innerHTML = saved.map((a, i) => renderArticle(a, null, i)).join('');
     return;
   }
 
   // ---- Single-category view ----
   if (activeCategory !== 'all') {
     const list = articles.filter(a => a.category === activeCategory);
-    if (!list.length) { main.innerHTML = `<div class="state">No stories yet. Pull to refresh.</div>`; return; }
+    if (!list.length) { main.innerHTML = `<div class="state"><div class="state-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-3.2-6.9"/><path d="M21 4v5h-5"/></svg></div><div class="state-title">No stories yet</div>Pull to refresh or check back soon.</div>`; return; }
     const hero = list.find(a => a.image) || list[0];
     const rest = list.filter(a => a !== hero).slice(0, 60);
-    main.innerHTML = renderArticle(hero, 'hero') + rest.map(a => renderArticle(a)).join('');
+    main.innerHTML = renderArticle(hero, 'hero', 0) + rest.map((a, i) => renderArticle(a, null, i + 1)).join('');
     return;
   }
 
   // ---- For You ----
   const curated = curatedForYou(articles);
-  if (!curated.length) { main.innerHTML = `<div class="state">No stories yet. Pull to refresh.</div>`; return; }
+  if (!curated.length) { main.innerHTML = `<div class="state"><div class="state-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-3.2-6.9"/><path d="M21 4v5h-5"/></svg></div><div class="state-title">No stories yet</div>Pull to refresh or check back soon.</div>`; return; }
 
   const used = new Set();
   // Quick Brief: top 3 unique top-ranked items
@@ -820,6 +840,7 @@ function render() {
   practiceItems.forEach(a => used.add(a.link));
 
   // Per-category sections (header tappable + "More in" footer button)
+  let globalIdx = 0;
   const sectionsHtml = SECTION_ORDER.map(cat => {
     const items = articles
       .filter(a => a.category === cat && !used.has(a.link))
@@ -827,19 +848,20 @@ function render() {
       .slice(0, 4);
     if (!items.length) return '';
     items.forEach(a => used.add(a.link));
-    return renderSectionHeader(CAT_LABELS[cat], CAT_COLOR[cat], cat) +
-           items.map(a => renderArticle(a)).join('') +
+    const html = renderSectionHeader(CAT_LABELS[cat], CAT_COLOR[cat], cat) +
+           items.map((a, i) => { globalIdx++; return renderArticle(a, null, globalIdx); }).join('') +
            renderSectionFooter(cat, CAT_LABELS[cat]);
+    return html;
   }).join('');
 
   main.innerHTML =
     renderQuickBrief(brief) +
-    renderArticle(heroCandidate, 'hero') +
+    renderArticle(heroCandidate, 'hero', 0) +
     renderSectionHeader('Top Stories', 'var(--fg)', null) +
-    topStories.map(a => renderArticle(a)).join('') +
+    topStories.map((a, i) => renderArticle(a, null, i + 1)).join('') +
     (practiceItems.length
       ? renderSectionHeader('For Your Practice', 'var(--gold)', null, 'Founders &amp; legal tech, curated for For Founders Law.') +
-        practiceItems.map(a => renderArticle(a)).join('') +
+        practiceItems.map((a, i) => renderArticle(a, null, i + 1)).join('') +
         renderSectionFooter('legal-tech', 'Legal Tech')
       : '') +
     sectionsHtml;
@@ -857,12 +879,17 @@ function timeOfDayGreeting() {
 }
 function dayPrefix() {
   const d = new Date();
-  const day = d.getDay();   // 0 Sun
+  const day = d.getDay();
   const h = d.getHours();
+  if (day === 0 && h < 12) return 'Lazy Sunday';
   if (day === 0) return 'Happy Sunday';
+  if (day === 6 && h < 12) return 'Saturday morning';
   if (day === 6) return 'Happy Saturday';
-  if (day === 5 && h >= 16) return 'TGIF';
+  if (day === 5 && h >= 16) return 'Happy Friday';
+  if (day === 5 && h >= 12) return 'Friday vibes';
   if (day === 1 && h < 12) return 'Monday morning';
+  if (day === 3 && h >= 12) return 'Midweek';
+  if (day === 4 && h >= 16) return 'Almost Friday';
   return null;
 }
 function updateGreeting(ts) {
@@ -880,7 +907,7 @@ function updateGreeting(ts) {
   }
   if (sub) {
     const dateStr = new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
-    const updated = ts ? ` · updated ${timeAgo(ts)}` : '';
+    const updated = ts ? ` · ${timeAgo(ts)}` : '';
     let newCountHtml = '';
     if (ts && activeCategory === 'all') {
       const fresh = articles.filter(a => a.timestamp > lastSeenAt).length;
@@ -893,9 +920,12 @@ function updateGreeting(ts) {
 
 function timeAgo(ts) {
   const diff = (Date.now() - ts) / 1000;
-  if (diff < 60) return 'just now';
+  if (diff < 30) return 'just now';
+  if (diff < 90) return '1m ago';
   if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 7200) return '1h ago';
   if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  if (diff < 172800) return 'yesterday';
   if (diff < 86400 * 7) return `${Math.floor(diff / 86400)}d ago`;
   return new Date(ts).toLocaleDateString();
 }
@@ -1018,7 +1048,7 @@ const settingsClose    = document.getElementById('settings-close');
 
 function openSheet()  { settingsSheet.classList.add('open');  sheetBackdrop.classList.add('open'); document.body.style.overflow='hidden'; updateSettingsCounts(); }
 function closeSheet() { settingsSheet.classList.remove('open'); sheetBackdrop.classList.remove('open'); document.body.style.overflow=''; }
-settingsFab.addEventListener('click', openSheet);
+if (settingsFab) settingsFab.addEventListener('click', openSheet);
 settingsClose.addEventListener('click', closeSheet);
 sheetBackdrop.addEventListener('click', closeSheet);
 
@@ -1184,7 +1214,7 @@ function renderSearchResults(q) {
     searchResults.innerHTML = `<div class="search-hint"><div class="big">No results</div>Try a different word — or refresh the feed.</div>`;
     return;
   }
-  searchResults.innerHTML = hits.map(a => renderArticle(a)).join('');
+  searchResults.innerHTML = hits.map((a, i) => renderArticle(a, null, i)).join('');
 }
 searchBtn?.addEventListener('click', openSearch);
 searchCancel?.addEventListener('click', closeSearch);
