@@ -666,10 +666,92 @@ document.getElementById('setting-clear-cache').addEventListener('click', async (
   location.reload();
 });
 
+// ============ Bottom tab bar — iOS-style nav ============
+const tabbarToday    = document.getElementById('tabbar-today');
+const tabbarSaved    = document.getElementById('tabbar-saved');
+const tabbarSections = document.getElementById('tabbar-sections');
+const tabbarSettings = document.getElementById('tabbar-settings');
+const sectionsSheet  = document.getElementById('sections-sheet');
+const sectionsClose  = document.getElementById('sections-close');
+const sectionsGrid   = document.getElementById('sections-grid');
+const tbSavedBadge   = document.getElementById('tb-saved-badge');
+
+function switchToCategory(cat) {
+  document.querySelectorAll('.seg').forEach(t => t.classList.toggle('active', t.dataset.cat === cat));
+  activeCategory = cat;
+  updateGreeting(readCache()?.fetchedAt);
+  render();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  updateTabbarActive();
+}
+
+function updateTabbarActive() {
+  document.querySelectorAll('.tabbar-item').forEach(b => b.classList.remove('active'));
+  if (activeCategory === 'all')        tabbarToday.classList.add('active');
+  else if (activeCategory === 'saved') tabbarSaved.classList.add('active');
+  else                                 tabbarSections.classList.add('active');
+}
+
+function updateSavedBadge() {
+  const n = Object.keys(savedMap).length;
+  if (!tbSavedBadge) return;
+  if (n > 0) { tbSavedBadge.textContent = n > 99 ? '99+' : String(n); tbSavedBadge.style.display = ''; }
+  else tbSavedBadge.style.display = 'none';
+}
+
+function openSectionsSheet() {
+  // Build the grid
+  const stats = {};
+  for (const a of articles) { stats[a.category] = (stats[a.category] || 0) + 1; }
+  const cats = ['founders','ai','legal-tech','markets','style','pop-culture','us-news','canada-news','israel-iran'];
+  sectionsGrid.innerHTML = cats.map(c => `
+    <button class="section-card" data-cat="${c}" style="--sc-color:${CAT_COLOR[c]}">
+      <span class="sc-dot"></span>
+      <span class="sc-label">${CAT_LABELS[c]}</span>
+      <span class="sc-meta">${stats[c] || 0} stories</span>
+    </button>
+  `).join('');
+  sectionsSheet.classList.add('open');
+  sheetBackdrop.classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+function closeSectionsSheet() {
+  sectionsSheet.classList.remove('open');
+  if (!settingsSheet.classList.contains('open')) sheetBackdrop.classList.remove('open');
+  document.body.style.overflow = '';
+}
+sectionsClose.addEventListener('click', closeSectionsSheet);
+sectionsGrid.addEventListener('click', (e) => {
+  const card = e.target.closest('.section-card');
+  if (!card) return;
+  closeSectionsSheet();
+  switchToCategory(card.dataset.cat);
+});
+
+tabbarToday.addEventListener('click', () => switchToCategory('all'));
+tabbarSaved.addEventListener('click', () => switchToCategory('saved'));
+tabbarSections.addEventListener('click', () => openSectionsSheet());
+tabbarSettings.addEventListener('click', () => openSheet());
+
+// Close sections sheet when backdrop clicked
+sheetBackdrop.addEventListener('click', () => {
+  if (sectionsSheet.classList.contains('open')) closeSectionsSheet();
+});
+
+// Keep tabbar active state in sync when category changes via top tabs
+document.getElementById('tabs').addEventListener('click', () => setTimeout(updateTabbarActive, 0));
+
+// Keep saved badge fresh
+const _origPersistSaved = persistSaved;
+persistSaved = function() { _origPersistSaved.apply(this, arguments); updateSavedBadge(); };
+
 // ============ boot ============
 readSet  = loadRead();
 savedMap = loadSaved();
 lastSeenAt = loadLastSeen() || Date.now();
 bumpLastSeen();
+document.body.classList.add('has-tabbar');
 updateGreeting(null);
+updateTabbarActive();
+updateSavedBadge();
 loadAll(false);

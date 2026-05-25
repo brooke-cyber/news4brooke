@@ -85,6 +85,9 @@
     min-height: 100vh;
     padding: var(--safe-top) 0 calc(var(--safe-bottom) + 96px);
   }
+  body.has-tabbar {
+    padding-bottom: calc(var(--safe-bottom) + 78px);
+  }
   img { -webkit-user-drag: none; user-select: none; }
 
   /* ============ Header ============ */
@@ -552,8 +555,52 @@
   }
   .fab:active { transform: scale(0.92); }
   .fab svg { width: 20px; height: 20px; }
-  .fab.fab-up { right: calc(env(safe-area-inset-right) + 16px); bottom: calc(env(safe-area-inset-bottom) + 86px); opacity: 0; pointer-events: none; transition: opacity 0.25s ease, transform 0.15s ease; }
+  .fab.fab-up {
+    right: calc(env(safe-area-inset-right) + 16px);
+    bottom: calc(env(safe-area-inset-bottom) + 100px);
+    width: 44px; height: 44px;
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.25s ease, transform 0.15s ease;
+  }
   body.scrolled-far .fab.fab-up { opacity: 1; pointer-events: auto; }
+
+  /* ============ Bottom tab bar — iOS native ============ */
+  .tabbar {
+    position: fixed; left: 0; right: 0; bottom: 0;
+    z-index: 35;
+    background: color-mix(in srgb, var(--bg) 86%, transparent);
+    -webkit-backdrop-filter: blur(34px) saturate(180%);
+    backdrop-filter: blur(34px) saturate(180%);
+    border-top: 0.5px solid var(--hairline);
+    padding: 6px 6px calc(8px + env(safe-area-inset-bottom));
+    display: flex; justify-content: space-around; align-items: stretch;
+  }
+  .tabbar-item {
+    flex: 1; max-width: 100px;
+    appearance: none; -webkit-appearance: none;
+    background: none; border: none;
+    color: var(--fg-3);
+    display: inline-flex; flex-direction: column; align-items: center; gap: 3px;
+    padding: 7px 4px 5px;
+    cursor: pointer;
+    transition: color 0.18s ease, transform 0.12s ease;
+    font-family: inherit;
+  }
+  .tabbar-item:active { transform: scale(0.92); }
+  .tabbar-item svg { width: 22px; height: 22px; transition: transform 0.18s ease; }
+  .tabbar-item .tbl { font-size: 10.5px; font-weight: 600; letter-spacing: 0.01em; }
+  .tabbar-item.active { color: var(--fg); }
+  .tabbar-item.active svg { transform: scale(1.04); }
+  .tabbar-item .tb-badge {
+    position: absolute; top: 4px; transform: translateX(12px);
+    min-width: 16px; height: 16px; border-radius: 8px;
+    background: #ff453a; color: #fff;
+    font-size: 10px; font-weight: 700;
+    display: inline-flex; align-items: center; justify-content: center;
+    padding: 0 4px;
+    box-shadow: 0 0 0 2px var(--bg);
+  }
+  .tabbar-item-wrap { position: relative; display: inline-flex; flex-direction: column; align-items: center; }
 
   /* ============ Settings bottom sheet ============ */
   .sheet-backdrop {
@@ -623,6 +670,41 @@
     font-size: 12px; font-weight: 600;
     color: var(--fg-3); letter-spacing: 0.08em;
     text-transform: uppercase;
+  }
+
+  /* Sections grid (inside sections sheet) */
+  .sections-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .section-card {
+    appearance: none; -webkit-appearance: none;
+    background: var(--bg-elev-2);
+    border: 0.5px solid var(--hairline);
+    border-radius: 16px;
+    padding: 16px 14px;
+    text-align: left;
+    color: var(--fg);
+    cursor: pointer;
+    transition: transform 0.12s ease, background 0.18s ease;
+    display: flex; flex-direction: column; gap: 4px;
+    font-family: inherit;
+  }
+  .section-card:active { transform: scale(0.97); background: var(--bg-elev-3); }
+  .section-card .sc-dot {
+    width: 9px; height: 9px; border-radius: 50%;
+    background: var(--sc-color, var(--tint));
+    box-shadow: 0 0 12px var(--sc-color, var(--tint));
+    margin-bottom: 4px;
+  }
+  .section-card .sc-label {
+    font-family: var(--serif);
+    font-size: 18px; font-weight: 600; letter-spacing: -0.014em;
+    line-height: 1.18;
+  }
+  .section-card .sc-meta {
+    font-size: 11.5px; color: var(--fg-3); margin-top: 2px;
   }
 
   /* ============ Loading skeletons ============ */
@@ -742,12 +824,57 @@
     <path d="M12 19V5"/><path d="M5 12l7-7 7 7"/>
   </svg>
 </button>
-<button class="fab" id="settings-fab" type="button" aria-label="Settings">
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-    <circle cx="12" cy="12" r="3"/>
-    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-  </svg>
-</button>
+
+<!-- iOS-style bottom tab bar -->
+<nav class="tabbar" id="tabbar" role="tablist">
+  <button class="tabbar-item active" id="tabbar-today" type="button" data-bar="today" role="tab" aria-label="Today">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 9.5L12 3l9 6.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/>
+    </svg>
+    <span class="tbl">Today</span>
+  </button>
+  <button class="tabbar-item" id="tabbar-saved" type="button" data-bar="saved" role="tab" aria-label="Saved">
+    <span class="tabbar-item-wrap">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M6 3h12a1 1 0 0 1 1 1v17l-7-4-7 4V4a1 1 0 0 1 1-1z"/>
+      </svg>
+      <span class="tb-badge" id="tb-saved-badge" style="display:none;">0</span>
+    </span>
+    <span class="tbl">Saved</span>
+  </button>
+  <button class="tabbar-item" id="tabbar-sections" type="button" data-bar="sections" role="tab" aria-label="Sections">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="3" y="3" width="7" height="7" rx="1.5"/>
+      <rect x="14" y="3" width="7" height="7" rx="1.5"/>
+      <rect x="3" y="14" width="7" height="7" rx="1.5"/>
+      <rect x="14" y="14" width="7" height="7" rx="1.5"/>
+    </svg>
+    <span class="tbl">Sections</span>
+  </button>
+  <button class="tabbar-item" id="tabbar-settings" type="button" data-bar="settings" role="tab" aria-label="Settings">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="3"/>
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+    </svg>
+    <span class="tbl">Settings</span>
+  </button>
+</nav>
+
+<!-- Sections grid sheet -->
+<div class="sheet" id="sections-sheet" role="dialog" aria-label="Sections">
+  <div class="sheet-grabber"></div>
+  <div class="sheet-header">
+    <div class="sheet-title">All sections</div>
+    <button class="icon-btn" id="sections-close" type="button" aria-label="Close">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M18 6L6 18"/><path d="M6 6l12 12"/>
+      </svg>
+    </button>
+  </div>
+  <div class="sheet-body">
+    <div class="sections-grid" id="sections-grid"></div>
+  </div>
+</div>
 
 <div class="sheet-backdrop" id="sheet-backdrop"></div>
 <div class="sheet" id="settings-sheet" role="dialog" aria-label="Settings">
