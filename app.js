@@ -243,6 +243,7 @@ async function loadAll(force = false) {
   if (cached) {
     articles = cached.articles;
     render();
+    updateTabCounts();
     updateGreeting(cached.fetchedAt);
     if (fresh && !force) return;
   }
@@ -267,6 +268,7 @@ async function loadAll(force = false) {
   articles = deduped;
   writeCache(articles);
   render();
+  updateTabCounts();
   updateGreeting(Date.now());
 }
 
@@ -611,6 +613,7 @@ document.getElementById('tabs').addEventListener('click', e => {
   bumpLastSeen(); lastSeenAt = Date.now();
   updateGreeting(readCache()?.fetchedAt);
   render();
+  updateTabCounts();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 });
 
@@ -822,8 +825,8 @@ function updateTabCounts() {
     } else if (countEl) countEl.remove();
   });
 }
-const _origRender = render;
-render = function() { _origRender.apply(this, arguments); updateTabCounts(); };
+// Note: tab counts are refreshed wherever we call render() — see boot, loadAll, tab handlers
+// Wrapping render() directly proved unreliable across script-loading modes.
 
 // ============ Search overlay ============
 const searchBtn      = document.getElementById('search-btn');
@@ -917,4 +920,5 @@ document.body.classList.add('has-tabbar');
 updateGreeting(null);
 updateTabbarActive();
 updateSavedBadge();
+updateTabCounts();
 loadAll(false);
