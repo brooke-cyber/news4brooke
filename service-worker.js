@@ -1,44 +1,19 @@
-// Brief — service worker
-// Caches app shell so the PWA opens instantly and works offline (showing cached articles).
+// News4Brooke — network-only service worker.
+// Purpose: still registers so iOS treats it as a PWA, but NEVER caches anything.
+// Every page load goes to the network so updates always land instantly.
+// Trade-off: no offline mode. Acceptable for a live news app.
 
-const CACHE = 'n4b-shell-v13';
-const SHELL = [
-  './',
-  './index.html',
-  './app.js',
-  './manifest.json',
-  './icon-192.png',
-  './icon-512.png',
-  './apple-touch-icon.png',
-];
+self.addEventListener('install', () => self.skipWaiting());
 
-self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));
+self.addEventListener('activate', (event) => {
+  event.waitUntil((async () => {
+    // Delete every cache from previous SW versions
+    const keys = await caches.keys();
+    await Promise.all(keys.map(k => caches.delete(k)));
+    // Take control of all open clients immediately
+    await self.clients.claim();
+  })());
 });
 
-self.addEventListener('activate', e => {
-  e.waitUntil(
-    caches.keys().then(keys =>
-      Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
-    ).then(() => self.clients.claim())
-  );
-});
-
-self.addEventListener('fetch', e => {
-  const url = new URL(e.request.url);
-  // Only intercept same-origin GETs — let RSS proxy calls go straight to network.
-  if (e.request.method !== 'GET' || url.origin !== self.location.origin) return;
-
-  e.respondWith(
-    caches.match(e.request).then(cached => {
-      const network = fetch(e.request).then(res => {
-        if (res && res.status === 200) {
-          const copy = res.clone();
-          caches.open(CACHE).then(c => c.put(e.request, copy));
-        }
-        return res;
-      }).catch(() => cached);
-      return cached || network;
-    })
-  );
-});
+// No fetch listener — the browser handles all network requests natively.
+// No stale shell, no surprise old code being served.
