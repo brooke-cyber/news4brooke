@@ -389,9 +389,15 @@ function renderSectionHeader(label, color, subtitle) {
 function renderQuickBrief(items) {
   if (!items.length) return '';
   return `
-    <div class="quick-brief">
+    <div class="quick-brief" data-brief>
       <div class="qb-eyebrow">Today's Brief</div>
-      <div class="qb-title">The three things to know.</div>
+      <div class="qb-head">
+        <div class="qb-title">The three things to know.</div>
+        <button class="qb-listen" id="qb-listen-btn" type="button" aria-label="Listen">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polygon points="6 4 20 12 6 20 6 4" fill="currentColor"/></svg>
+          <span>Listen</span>
+        </button>
+      </div>
       <ol class="qb-list">
         ${items.map(a => `
           <a class="qb-item ${readSet.has(a.link) ? 'read' : ''}" href="${escapeAttr(a.link)}" target="_blank" rel="noopener" data-link="${escapeAttr(a.link)}">
@@ -404,6 +410,43 @@ function renderQuickBrief(items) {
       </ol>
     </div>
   `;
+}
+
+// ============ Listen mode (Web Speech API) ============
+let speakingActive = false;
+function listenToBrief(items) {
+  const btn = document.getElementById('qb-listen-btn');
+  if (!window.speechSynthesis) return;
+  if (speakingActive) {
+    window.speechSynthesis.cancel();
+    speakingActive = false;
+    btn?.classList.remove('playing');
+    btn && (btn.querySelector('span').textContent = 'Listen');
+    return;
+  }
+  const intro = `Here are the three things to know, ${timeOfDayGreeting().toLowerCase()}, Brooke. `;
+  const body = items.map((a, i) =>
+    `Number ${i+1}, from ${a.source}: ${a.title}.${a.desc ? ' ' + a.desc : ''}`
+  ).join(' ');
+  const utter = new SpeechSynthesisUtterance(intro + body);
+  utter.rate = 1.0;
+  utter.pitch = 1.0;
+  // Try to pick a nice English voice
+  const voices = window.speechSynthesis.getVoices();
+  const preferred = voices.find(v => /Samantha|Karen|Moira|Ava|Allison/i.test(v.name) && /en/i.test(v.lang))
+                 || voices.find(v => /en[-_]US/i.test(v.lang) && !v.name.includes('Google'))
+                 || voices.find(v => /en/i.test(v.lang));
+  if (preferred) utter.voice = preferred;
+  utter.onend = () => {
+    speakingActive = false;
+    btn?.classList.remove('playing');
+    btn && (btn.querySelector('span').textContent = 'Listen');
+  };
+  utter.onerror = utter.onend;
+  speakingActive = true;
+  btn?.classList.add('playing');
+  btn && (btn.querySelector('span').textContent = 'Stop');
+  window.speechSynthesis.speak(utter);
 }
 
 function render() {
@@ -445,6 +488,7 @@ function render() {
   // Quick Brief: top 3 unique top-ranked items
   const brief = [];
   for (const a of curated) { if (brief.length >= 3) break; brief.push(a); used.add(a.link); }
+  window.__brief = brief;
 
   // Hero: best curated item with image (not in brief)
   const heroCandidate = curated.find(a => a.image && !used.has(a.link)) || curated.find(a => !used.has(a.link)) || curated[0];
@@ -572,14 +616,28 @@ document.getElementById('tabs').addEventListener('click', e => {
 
 // Mark articles read on click and toggle bookmarks
 document.getElementById('feed').addEventListener('click', (e) => {
+  // Listen button
+  if (e.target.closest('#qb-listen-btn')) {
+    e.preventDefault(); e.stopPropagation();
+    const briefItems = (window.__brief || []);
+    listenToBrief(briefItems);
+    return;
+  }
   const bm = e.target.closest('[data-action="save"]');
   if (bm) {
     e.preventDefault(); e.stopPropagation();
     const link = bm.dataset.link;
     const art = articles.find(a => a.link === link) || savedMap[link];
     if (!art) return;
-    if (savedMap[link]) { delete savedMap[link]; }
-    else { savedMap[link] = { ...art, savedAt: Date.now() }; }
+    const wasSaved = !!savedMap[link];
+    if (wasSaved) { delete savedMap[link]; }
+    else {
+      savedMap[link] = { ...art, savedAt: Date.now() };
+      // Animate the icon
+      bm.classList.remove('pop');
+      void bm.offsetWidth;
+      bm.classList.add('pop');
+    }
     persistSaved();
     render();
     return;
@@ -744,6 +802,111 @@ document.getElementById('tabs').addEventListener('click', () => setTimeout(updat
 // Keep saved badge fresh
 const _origPersistSaved = persistSaved;
 persistSaved = function() { _origPersistSaved.apply(this, arguments); updateSavedBadge(); };
+
+// ============ Tab counts (top scrolling pills) ============
+function updateTabCounts() {
+  document.querySelectorAll('.seg').forEach(btn => {
+    const cat = btn.dataset.cat;
+    let n = 0;
+    if (cat === 'all') n = articles.length;
+    else if (cat === 'saved') n = Object.keys(savedMap).length;
+    else n = articles.filter(a => a.category === cat).length;
+    let countEl = btn.querySelector('.seg-count');
+    if (n > 0) {
+      if (!countEl) {
+        countEl = document.createElement('span');
+        countEl.className = 'seg-count';
+        btn.appendChild(countEl);
+      }
+      countEl.textContent = n > 999 ? '999+' : String(n);
+    } else if (countEl) countEl.remove();
+  });
+}
+const _origRender = render;
+render = function() { _origRender.apply(this, arguments); updateTabCounts(); };
+
+// ============ Search overlay ============
+const searchBtn      = document.getElementById('search-btn');
+const searchOverlay  = document.getElementById('search-overlay');
+const searchCancel   = document.getElementById('search-cancel');
+const searchInput    = document.getElementById('search-input');
+const searchResults  = document.getElementById('search-results');
+
+function openSearch() {
+  searchOverlay.classList.add('open');
+  setTimeout(() => searchInput?.focus(), 220);
+  if (!searchInput.value) renderSearchResults('');
+}
+function closeSearch() {
+  searchOverlay.classList.remove('open');
+  searchInput.value = '';
+}
+function renderSearchResults(q) {
+  q = (q || '').trim().toLowerCase();
+  if (!q) {
+    searchResults.innerHTML = `
+      <div class="search-hint">
+        <div class="big">Search the feed</div>
+        Find any headline, source, or topic across every category.
+      </div>`;
+    return;
+  }
+  const tokens = q.split(/\s+/).filter(Boolean);
+  const hits = articles.filter(a => {
+    const blob = (a.title + ' ' + a.desc + ' ' + a.source + ' ' + (CAT_LABELS[a.category] || '')).toLowerCase();
+    return tokens.every(t => blob.includes(t));
+  }).slice(0, 60);
+  if (!hits.length) {
+    searchResults.innerHTML = `<div class="search-hint"><div class="big">No results</div>Try a different word — or refresh the feed.</div>`;
+    return;
+  }
+  searchResults.innerHTML = hits.map(a => renderArticle(a)).join('');
+}
+searchBtn?.addEventListener('click', openSearch);
+searchCancel?.addEventListener('click', closeSearch);
+searchInput?.addEventListener('input', () => renderSearchResults(searchInput.value));
+searchResults?.addEventListener('click', (e) => {
+  const bm = e.target.closest('[data-action="save"]');
+  if (bm) {
+    e.preventDefault(); e.stopPropagation();
+    const link = bm.dataset.link;
+    const art = articles.find(a => a.link === link) || savedMap[link];
+    if (!art) return;
+    if (savedMap[link]) delete savedMap[link];
+    else { savedMap[link] = { ...art, savedAt: Date.now() }; bm.classList.remove('pop'); void bm.offsetWidth; bm.classList.add('pop'); }
+    persistSaved();
+    renderSearchResults(searchInput.value);
+    render();
+    return;
+  }
+  const a = e.target.closest('[data-link]');
+  if (a && a.dataset.link && !readSet.has(a.dataset.link)) {
+    readSet.add(a.dataset.link); saveRead();
+  }
+});
+
+// ============ Theme picker ============
+const THEME_KEY = 'n4b.theme';
+function applyTheme(t) {
+  if (t === 'auto') document.documentElement.removeAttribute('data-theme');
+  else document.documentElement.setAttribute('data-theme', t);
+}
+function loadTheme() { return localStorage.getItem(THEME_KEY) || 'auto'; }
+function saveTheme(t) { try { localStorage.setItem(THEME_KEY, t); } catch {} }
+const themePicker = document.getElementById('theme-picker');
+if (themePicker) {
+  const cur = loadTheme();
+  themePicker.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.theme === cur));
+  themePicker.addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-theme]');
+    if (!b) return;
+    const t = b.dataset.theme;
+    themePicker.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
+    applyTheme(t);
+    saveTheme(t);
+  });
+}
+applyTheme(loadTheme());
 
 // ============ boot ============
 readSet  = loadRead();
