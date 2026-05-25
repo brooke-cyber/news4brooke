@@ -20,6 +20,14 @@ const FEEDS = {
     { name: 'Artificial Lawyer',     url: 'https://www.artificiallawyer.com/feed/' },
     { name: 'LawSites',              url: 'https://www.lawnext.com/feed' },
     { name: 'Law360',                url: 'https://www.law360.com/legalindustry/rss' },
+    // Brand-focused AI legal tech (Harvey, Crosby, Legora, Spellbook, Robin AI, Claude/GPT-for-law)
+    { name: 'AI Legal Tech',         url: 'https://news.google.com/rss/search?q=(%22Harvey+AI%22+OR+%22Crosby+AI%22+OR+Legora+OR+Spellbook+OR+%22Robin+AI%22+OR+%22Hebbia%22+OR+%22Eve+Legal%22+OR+%22Ironclad+AI%22+OR+%22Claude+legal%22+OR+%22ChatGPT+legal%22+OR+%22legal+AI+startup%22)+when:14d&hl=en-US&gl=US&ceid=US:en' },
+    { name: 'Harvey AI',             url: 'https://news.google.com/rss/search?q=%22Harvey+AI%22+OR+%22Harvey.ai%22+when:30d&hl=en-US&gl=US&ceid=US:en' },
+  ],
+  'astrology': [
+    { name: 'Astrostyle',            url: 'https://astrostyle.com/feed/' },
+    { name: 'Aries Daily',           url: 'https://news.google.com/rss/search?q=%22Aries+horoscope%22+today+when:1d&hl=en-US&gl=US&ceid=US:en' },
+    { name: 'Moon Watch',            url: 'https://news.google.com/rss/search?q=%22full+moon%22+OR+%22new+moon%22+OR+%22moon+phase%22+OR+%22moon+sign%22+when:3d&hl=en-US&gl=US&ceid=US:en' },
   ],
   'markets': [
     { name: 'CNBC',                  url: 'https://www.cnbc.com/id/100003114/device/rss/rss.html' },
@@ -76,6 +84,7 @@ const CAT_LABELS = {
   'markets':     'Markets',
   'style':       'Style & Beauty',
   'pop-culture': 'Pop Culture',
+  'astrology':   'Stars',
   'us-news':     'US',
   'canada-news': 'Canada',
   'israel-iran': 'Israel/Iran',
@@ -87,11 +96,20 @@ const CAT_COLOR = {
   'markets':     'var(--c-markets)',
   'style':       'var(--c-style)',
   'pop-culture': 'var(--c-pop)',
+  'astrology':   '#c0a3e6',
   'us-news':     'var(--c-us)',
   'canada-news': 'var(--c-canada)',
   'israel-iran': 'var(--c-israel)',
 };
-const SECTION_ORDER = ['ai','markets','style','pop-culture','us-news','canada-news','israel-iran'];
+const SECTION_ORDER = ['ai','markets','style','pop-culture','astrology','us-news','canada-news','israel-iran'];
+
+// Brooke's birth chart (March 22, 2000 · 1:19 AM · Toronto, Ontario)
+const BROOKE_CHART = {
+  sun:     { sign: 'Aries',       glyph: '♈', element: 'Fire', modality: 'Cardinal', archetype: 'The pioneer — bold, direct, all-in.' },
+  moon:    { sign: 'Libra',       glyph: '♎', element: 'Air',  modality: 'Cardinal', archetype: 'Emotionally needs harmony, beauty, partnership.' },
+  rising:  { sign: 'Sagittarius', glyph: '♐', element: 'Fire', modality: 'Mutable',  archetype: 'Reads as adventurous, philosophical, candid.' },
+  born:    'March 22, 2000 · 1:19 AM · Toronto, Ontario',
+};
 
 // Source avatar colors (deterministic by source name)
 const SOURCE_COLORS = ['#6c8bef','#e88aa5','#67c9c1','#d4af6a','#a78bfa','#5ec27a','#e8a572','#8ba9d9','#d88a8a','#b89dd6'];
@@ -379,12 +397,280 @@ function renderArticle(a, variant) {
   return renderArticleCompact(a);
 }
 
-function renderSectionHeader(label, color, subtitle) {
+function renderSectionHeader(label, color, jumpCat, subtitle) {
+  const jumpAttr = jumpCat ? `data-jump-cat="${jumpCat}"` : '';
+  const cls = jumpCat ? 'section-header' : 'section-header no-jump';
+  const tail = jumpCat ? '<span class="see-more">All →</span>' : '';
   return `
-    <div class="section-header">
+    <button class="${cls}" ${jumpAttr} type="button">
       <h2><span class="section-dot" style="--section-color:${color}"></span>${label}</h2>
-    </div>
+      ${tail}
+    </button>
     ${subtitle ? `<div class="section-sub">${subtitle}</div>` : ''}
+  `;
+}
+
+function renderSectionFooter(cat, label) {
+  if (!cat) return '';
+  return `<button class="section-footer" type="button" data-jump-cat="${cat}">More in ${label} →</button>`;
+}
+
+// ============ Astrology helpers ============
+const ZODIAC = ['Aries','Taurus','Gemini','Cancer','Leo','Virgo','Libra','Scorpio','Sagittarius','Capricorn','Aquarius','Pisces'];
+const ZODIAC_GLYPHS = { Aries:'♈',Taurus:'♉',Gemini:'♊',Cancer:'♋',Leo:'♌',Virgo:'♍',Libra:'♎',Scorpio:'♏',Sagittarius:'♐',Capricorn:'♑',Aquarius:'♒',Pisces:'♓' };
+
+function moonPhase(date = new Date()) {
+  // Conway/NASA-style approximation
+  const newMoonRef = Date.UTC(2000, 0, 6, 18, 14, 0) / 1000; // Jan 6 2000 18:14 UTC = new moon
+  const synodic = 29.530588853 * 86400; // seconds
+  const t = (date.getTime() / 1000 - newMoonRef) % synodic;
+  const phase = t / synodic; // 0..1
+  let name, glyph;
+  if (phase < 0.03 || phase > 0.97) { name = 'New Moon'; glyph = '🌑'; }
+  else if (phase < 0.22) { name = 'Waxing Crescent'; glyph = '🌒'; }
+  else if (phase < 0.28) { name = 'First Quarter'; glyph = '🌓'; }
+  else if (phase < 0.47) { name = 'Waxing Gibbous'; glyph = '🌔'; }
+  else if (phase < 0.53) { name = 'Full Moon'; glyph = '🌕'; }
+  else if (phase < 0.72) { name = 'Waning Gibbous'; glyph = '🌖'; }
+  else if (phase < 0.78) { name = 'Last Quarter'; glyph = '🌗'; }
+  else { name = 'Waning Crescent'; glyph = '🌘'; }
+  const illum = Math.round(50 * (1 - Math.cos(2 * Math.PI * phase)));
+  return { name, glyph, illum, phase };
+}
+
+function moonSign(date = new Date()) {
+  // Mean longitude of the Moon (Meeus, simplified)
+  const d = (date.getTime() / 86400000) - 10957.5; // days since J2000
+  let L = (218.316 + 13.176396 * d) % 360;
+  if (L < 0) L += 360;
+  const sign = ZODIAC[Math.floor(L / 30)];
+  return { sign, glyph: ZODIAC_GLYPHS[sign], degree: Math.floor(L % 30) };
+}
+
+function sunSeason(date = new Date()) {
+  // What zodiac season the sun is currently in (approximate boundaries)
+  const m = date.getMonth() + 1, day = date.getDate();
+  const r = [
+    [3, 20, 'Aries'],[4, 20, 'Taurus'],[5, 21, 'Gemini'],[6, 21, 'Cancer'],
+    [7, 23, 'Leo'],[8, 23, 'Virgo'],[9, 23, 'Libra'],[10, 23, 'Scorpio'],
+    [11, 22, 'Sagittarius'],[12, 22, 'Capricorn'],[1, 20, 'Aquarius'],[2, 19, 'Pisces']
+  ];
+  // pick the most recent boundary not later than today
+  const stamp = m * 100 + day;
+  let cur = 'Pisces';
+  for (const [mm, dd, sign] of r) { if (stamp >= mm * 100 + dd) cur = sign; }
+  // wrap for jan/feb (pisces from feb 19 onwards, etc.)
+  // Aquarius spans late Jan to mid Feb, override
+  if ((m === 1 && day >= 20) || (m === 2 && day < 19)) cur = 'Aquarius';
+  return { sign: cur, glyph: ZODIAC_GLYPHS[cur] };
+}
+
+const MOON_SIGN_VIBE = {
+  Aries:'Bold, impatient, action-first. Pick the bravest option.',
+  Taurus:'Cozy, sensual, slow. Tend to your body and your space.',
+  Gemini:'Curious, chatty, scattered. A good day for ideas and texts.',
+  Cancer:'Tender and home-focused. Honor what you actually feel.',
+  Leo:'Warm, theatrical, generous. Take up space; be seen.',
+  Virgo:'Practical, fine-detail, clean-slate energy. Tidy something.',
+  Libra:'Harmonizing, social, aesthetic. Your home turf, Brooke.',
+  Scorpio:'Intense, private, transformative. Trust the undercurrent.',
+  Sagittarius:'Big-picture, restless, philosophical. Adventure beckons.',
+  Capricorn:'Disciplined, ambitious, structural. Build something.',
+  Aquarius:'Detached, inventive, future-facing. Solve something weird.',
+  Pisces:'Dreamy, porous, intuitive. Make art; nap; listen to music.',
+};
+const LIBRA_MOON_TODAY = (moonSignName) => {
+  if (moonSignName === 'Libra') return "The Moon is on your natal Moon today — emotionally home base. Expect big feelings, then balance.";
+  if (moonSignName === 'Aries') return "The Moon opposes your natal Moon — partnership tension or push-pull. Don't avoid the conversation.";
+  if (moonSignName === 'Cancer' || moonSignName === 'Capricorn') return "The Moon squares your natal Moon — friction with home or career goals. Adjust, don't force.";
+  if (moonSignName === 'Gemini' || moonSignName === 'Aquarius') return "Air-sign Moon trining your Libra Moon — ease, conversation, social flow.";
+  return `Moon in ${moonSignName}, working with your Libra Moon — emotional weather is shifting; notice what feels off.`;
+};
+const SAG_RISING_VIBE = "Your Sag Rising puts an outgoing, philosophical mask on the world — today's energy lands as: do bigger, ask bigger questions, follow what feels expansive, not what feels safe.";
+
+// Full natal placements for March 22, 2000 · 1:19 AM · Toronto
+// Inner planets derived from known 2000 ephemeris snapshots — degrees approximate.
+const BROOKE_NATAL = [
+  { body: 'Sun',       glyph: '☉', sign: 'Aries',       degree: '~1°',  house: '4th',  note: 'Identity, will' },
+  { body: 'Moon',      glyph: '☾', sign: 'Libra',       degree: '~19°', house: '11th', note: 'Emotions, needs' },
+  { body: 'Mercury',   glyph: '☿', sign: 'Pisces',      degree: '~22°', house: '3rd',  note: 'Mind, voice' },
+  { body: 'Venus',     glyph: '♀', sign: 'Aquarius',    degree: '~19°', house: '2nd',  note: 'Love, values' },
+  { body: 'Mars',      glyph: '♂', sign: 'Taurus',      degree: '~7°',  house: '5th',  note: 'Drive, anger' },
+  { body: 'Jupiter',   glyph: '♃', sign: 'Aries',       degree: '~26°', house: '4th',  note: 'Growth, luck' },
+  { body: 'Saturn',    glyph: '♄', sign: 'Taurus',      degree: '~17°', house: '5th',  note: 'Discipline' },
+  { body: 'Uranus',    glyph: '♅', sign: 'Aquarius',    degree: '~17°', house: '2nd',  note: 'Disruption' },
+  { body: 'Neptune',   glyph: '♆', sign: 'Aquarius',    degree: '~6°',  house: '2nd',  note: 'Dreams' },
+  { body: 'Pluto',     glyph: '♇', sign: 'Sagittarius', degree: '~12°', house: '1st',  note: 'Power, depth' },
+  { body: 'Rising',    glyph: '↑', sign: 'Sagittarius', degree: '~9°',  house: '—',   note: 'Outer mask' },
+];
+
+// Sun-sign element & modality (for synastry quick-look)
+const ZODIAC_META = {
+  Aries:{el:'Fire',mod:'Cardinal'}, Taurus:{el:'Earth',mod:'Fixed'}, Gemini:{el:'Air',mod:'Mutable'},
+  Cancer:{el:'Water',mod:'Cardinal'}, Leo:{el:'Fire',mod:'Fixed'}, Virgo:{el:'Earth',mod:'Mutable'},
+  Libra:{el:'Air',mod:'Cardinal'}, Scorpio:{el:'Water',mod:'Fixed'}, Sagittarius:{el:'Fire',mod:'Mutable'},
+  Capricorn:{el:'Earth',mod:'Cardinal'}, Aquarius:{el:'Air',mod:'Fixed'}, Pisces:{el:'Water',mod:'Mutable'},
+};
+function signFromDate(month, day) {
+  const r = [
+    [3,21,'Aries'],[4,20,'Taurus'],[5,21,'Gemini'],[6,21,'Cancer'],[7,23,'Leo'],[8,23,'Virgo'],
+    [9,23,'Libra'],[10,23,'Scorpio'],[11,22,'Sagittarius'],[12,22,'Capricorn'],[1,20,'Aquarius'],[2,19,'Pisces']
+  ];
+  const stamp = month * 100 + day;
+  let cur = 'Pisces';
+  for (const [m, d, s] of r) if (stamp >= m * 100 + d) cur = s;
+  if ((month === 1 && day >= 20) || (month === 2 && day < 19)) cur = 'Aquarius';
+  return cur;
+}
+function synastrySummary(theirSign) {
+  if (!theirSign) return null;
+  const mine = ZODIAC_META.Aries;            // her sun
+  const moon = ZODIAC_META.Libra;            // her moon
+  const them = ZODIAC_META[theirSign];
+  const sameEl = mine.el === them.el;
+  const compatibleEl = (
+    (mine.el === 'Fire' && (them.el === 'Air' || them.el === 'Fire')) ||
+    (mine.el === 'Air'  && (them.el === 'Fire' || them.el === 'Air'))  ||
+    (mine.el === 'Earth'&& (them.el === 'Water'|| them.el === 'Earth'))||
+    (mine.el === 'Water'&& (them.el === 'Earth'|| them.el === 'Water'))
+  );
+  let verdict;
+  if (sameEl) verdict = 'Strong elemental match — easy chemistry, similar pace.';
+  else if (compatibleEl) verdict = 'Compatible elements — natural attraction, with growth.';
+  else verdict = 'Tension elements — magnetic but high-effort; growth comes through difference.';
+  const moonSync = (moon.el === them.el) ? 'Your Libra Moon vibes with their sign — emotional ease.' : 'Your Libra Moon will need balance work with their style.';
+  return { verdict, moonSync, mine, them };
+}
+
+// Today's aspect of Sun to her Aries Sun (rough — by sign distance)
+function aspectToAriesSun(todaySign) {
+  const idx = (a) => ZODIAC.indexOf(a);
+  const diff = Math.abs(idx(todaySign) - idx('Aries'));
+  const d = Math.min(diff, 12 - diff);
+  switch (d) {
+    case 0: return 'Solar return energy — strong sense of self.';
+    case 1: return 'Soft hum next to your Sun — minor adjustments.';
+    case 2: return 'Sextile to your Sun — easy, opportunity.';
+    case 3: return 'Square to your Sun — friction; growth via challenge.';
+    case 4: return 'Trine to your Sun — flow, ease, momentum.';
+    case 5: return 'Quincunx — restless; pivot needed.';
+    case 6: return 'Opposition — mirror; relationships in focus.';
+  }
+}
+
+function renderAstrologyView() {
+  const today = new Date();
+  const mp = moonPhase(today);
+  const ms = moonSign(today);
+  const ss = sunSeason(today);
+  const aspect = aspectToAriesSun(ss.sign);
+  const dateStr = today.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
+
+  // Astrology articles (from the dedicated feed)
+  const astroArts = articles.filter(a => a.category === 'astrology').slice(0, 12);
+
+  return `
+    <div class="astro-section">
+      <!-- Birth chart -->
+      <div class="astro-card chart">
+        <div class="astro-eyebrow">Your Birth Chart</div>
+        <div class="astro-born">${BROOKE_CHART.born}</div>
+        <div class="big-three">
+          ${['sun','moon','rising'].map(k => {
+            const c = BROOKE_CHART[k];
+            return `
+              <div class="b3">
+                <div class="b3-glyph">${c.glyph}</div>
+                <div class="b3-label">${k === 'sun' ? 'Sun' : k === 'moon' ? 'Moon' : 'Rising'}</div>
+                <div class="b3-sign">${c.sign}</div>
+                <div class="b3-note">${c.archetype}</div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      </div>
+
+      <!-- Full placements -->
+      <div class="astro-card">
+        <div class="astro-eyebrow">All Placements</div>
+        <div class="placements">
+          ${BROOKE_NATAL.map(p => `
+            <div class="placement-row">
+              <span class="p-glyph">${p.glyph}</span>
+              <span class="p-body">${p.body}</span>
+              <span class="p-sign">${p.sign}</span>
+              <span class="p-degree">${p.degree}</span>
+              <span class="p-house">${p.house}</span>
+            </div>
+          `).join('')}
+        </div>
+        <div class="astro-note">Inner-planet degrees are reputable approximations; for precise minutes use a Placidus chart tool.</div>
+      </div>
+
+      <!-- Today's sky -->
+      <div class="astro-card">
+        <div class="astro-eyebrow">Today's Sky · ${escapeHtml(dateStr)}</div>
+        <div class="sky-grid">
+          <div class="sky-tile">
+            <div class="sky-glyph">${ZODIAC_GLYPHS[ss.sign]}</div>
+            <div class="sky-label">Sun</div>
+            <div class="sky-val">${ss.sign}</div>
+            <div class="sky-sub">${ZODIAC_META[ss.sign].el} · ${ZODIAC_META[ss.sign].mod}</div>
+          </div>
+          <div class="sky-tile">
+            <div class="sky-glyph">${ms.glyph}</div>
+            <div class="sky-label">Moon Sign</div>
+            <div class="sky-val">${ms.sign}</div>
+            <div class="sky-sub">${ZODIAC_META[ms.sign].el} · ${ZODIAC_META[ms.sign].mod}</div>
+          </div>
+          <div class="sky-tile">
+            <div class="sky-glyph">${mp.glyph}</div>
+            <div class="sky-label">Phase</div>
+            <div class="sky-val">${mp.name}</div>
+            <div class="sky-sub">${mp.illum}% illuminated</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Transit reading for Brooke -->
+      <div class="astro-card">
+        <div class="astro-eyebrow">Today's Transit Reading · For Brooke</div>
+        <div class="reading">
+          <div class="reading-row">
+            <div class="reading-label">☉ Sun in ${ss.sign} to your Aries Sun</div>
+            <div class="reading-body">${aspect}</div>
+          </div>
+          <div class="reading-row">
+            <div class="reading-label">☾ Moon in ${ms.sign} to your Libra Moon</div>
+            <div class="reading-body">${LIBRA_MOON_TODAY(ms.sign)}</div>
+          </div>
+          <div class="reading-row">
+            <div class="reading-label">↑ Sag Rising vibe</div>
+            <div class="reading-body">${SAG_RISING_VIBE}</div>
+          </div>
+          <div class="reading-row">
+            <div class="reading-label">Moon's flavor today</div>
+            <div class="reading-body">${MOON_SIGN_VIBE[ms.sign]}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Synastry tool -->
+      <div class="astro-card">
+        <div class="astro-eyebrow">Synastry · Quick Compatibility</div>
+        <div class="syn-controls">
+          <label for="syn-input">Partner's birthday</label>
+          <input id="syn-input" type="date" />
+        </div>
+        <div id="syn-result"></div>
+      </div>
+
+      <!-- News -->
+      ${astroArts.length ? `
+        <div class="section-header no-jump"><h2><span class="section-dot" style="--section-color:#c0a3e6"></span>Astrology News</h2></div>
+        ${astroArts.map(a => renderArticle(a)).join('')}
+      ` : ''}
+    </div>
   `;
 }
 
@@ -454,6 +740,32 @@ function listenToBrief(items) {
 function render() {
   const main = document.getElementById('feed');
 
+  // ---- Astrology (custom view) ----
+  if (activeCategory === 'astrology') {
+    main.innerHTML = renderAstrologyView();
+    // Wire up the synastry input each render
+    const synInput = document.getElementById('syn-input');
+    if (synInput) {
+      synInput.addEventListener('input', () => {
+        const [y, m, d] = synInput.value.split('-').map(Number);
+        const result = document.getElementById('syn-result');
+        if (!y || !m || !d) { result.innerHTML = ''; return; }
+        const sign = signFromDate(m, d);
+        const s = synastrySummary(sign);
+        result.innerHTML = `
+          <div class="syn-summary">
+            <div class="syn-row"><span class="syn-label">Their Sun</span><span class="syn-val">${sign} ${ZODIAC_GLYPHS[sign]}</span></div>
+            <div class="syn-row"><span class="syn-label">Their element</span><span class="syn-val">${s.them.el} · ${s.them.mod}</span></div>
+            <div class="syn-row"><span class="syn-label">Yours</span><span class="syn-val">Aries · ${s.mine.el} · ${s.mine.mod}</span></div>
+            <div class="syn-verdict">${s.verdict}</div>
+            <div class="syn-moon">${s.moonSync}</div>
+          </div>
+        `;
+      });
+    }
+    return;
+  }
+
   // ---- Saved tab ----
   if (activeCategory === 'saved') {
     const saved = Object.values(savedMap).sort((a,b) => (b.savedAt||0) - (a.savedAt||0));
@@ -507,7 +819,7 @@ function render() {
     .slice(0, 4);
   practiceItems.forEach(a => used.add(a.link));
 
-  // Per-category sections
+  // Per-category sections (header tappable + "More in" footer button)
   const sectionsHtml = SECTION_ORDER.map(cat => {
     const items = articles
       .filter(a => a.category === cat && !used.has(a.link))
@@ -515,18 +827,20 @@ function render() {
       .slice(0, 4);
     if (!items.length) return '';
     items.forEach(a => used.add(a.link));
-    return renderSectionHeader(CAT_LABELS[cat], CAT_COLOR[cat]) +
-           items.map(a => renderArticle(a)).join('');
+    return renderSectionHeader(CAT_LABELS[cat], CAT_COLOR[cat], cat) +
+           items.map(a => renderArticle(a)).join('') +
+           renderSectionFooter(cat, CAT_LABELS[cat]);
   }).join('');
 
   main.innerHTML =
     renderQuickBrief(brief) +
     renderArticle(heroCandidate, 'hero') +
-    renderSectionHeader('Top Stories', 'var(--fg)') +
+    renderSectionHeader('Top Stories', 'var(--fg)', null) +
     topStories.map(a => renderArticle(a)).join('') +
     (practiceItems.length
-      ? renderSectionHeader('For Your Practice', 'var(--gold)', 'Founders &amp; legal tech, curated for For Founders Law.') +
-        practiceItems.map(a => renderArticle(a)).join('')
+      ? renderSectionHeader('For Your Practice', 'var(--gold)', null, 'Founders &amp; legal tech, curated for For Founders Law.') +
+        practiceItems.map(a => renderArticle(a)).join('') +
+        renderSectionFooter('legal-tech', 'Legal Tech')
       : '') +
     sectionsHtml;
 }
@@ -619,6 +933,13 @@ document.getElementById('tabs').addEventListener('click', e => {
 
 // Mark articles read on click and toggle bookmarks
 document.getElementById('feed').addEventListener('click', (e) => {
+  // Section header / footer jump
+  const jump = e.target.closest('[data-jump-cat]');
+  if (jump && jump.dataset.jumpCat) {
+    e.preventDefault(); e.stopPropagation();
+    switchToCategory(jump.dataset.jumpCat);
+    return;
+  }
   // Listen button
   if (e.target.closest('#qb-listen-btn')) {
     e.preventDefault(); e.stopPropagation();

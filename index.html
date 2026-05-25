@@ -65,12 +65,39 @@
       --fg-3:          rgba(60,60,67,0.40);
     }
   }
-  /* Explicit theme overrides — set via data-theme on <html> */
+  /* ============ Refined Light theme — warm editorial ============ */
   html[data-theme="light"] {
-    --bg: #fbfbfd; --bg-elev-1:#ffffff; --bg-elev-2:#ffffff; --bg-elev-3:#ececef;
-    --hairline: rgba(60,60,67,0.08); --hairline-2: rgba(60,60,67,0.16);
-    --fg:#1d1d1f; --fg-2:rgba(60,60,67,0.70); --fg-3:rgba(60,60,67,0.40);
+    --bg:           #f8f6f1;     /* warm cream */
+    --bg-elev-1:    #ffffff;
+    --bg-elev-2:    #ffffff;
+    --bg-elev-3:    #ecebe7;
+    --hairline:     rgba(60,60,67,0.09);
+    --hairline-2:   rgba(60,60,67,0.16);
+    --fg:           #18181b;
+    --fg-2:         rgba(60,60,67,0.72);
+    --fg-3:         rgba(60,60,67,0.42);
+
+    --c-founders:  #b8923a;   /* warm gold */
+    --c-ai:        #7c5cf5;   /* iris */
+    --c-legal:     #2e9d96;   /* deeper teal */
+    --c-markets:   #2f9b56;   /* deeper green */
+    --c-style:     #d35a86;   /* deeper rose */
+    --c-pop:       #d68a4d;   /* deeper amber */
+    --c-us:        #4b78c7;   /* slate blue */
+    --c-canada:    #c95757;   /* deeper red */
+    --c-israel:    #8e69c4;   /* deeper lavender */
+
+    --tint:        #0a66ff;
+    --gold:        #b8923a;
   }
+  /* Cards get a subtle shadow in light mode for proper depth */
+  html[data-theme="light"] .quick-brief { box-shadow: 0 1px 2px rgba(28,28,30,0.04), 0 8px 24px rgba(28,28,30,0.05); }
+  html[data-theme="light"] .article.hero:not(.no-image) { box-shadow: 0 4px 16px rgba(28,28,30,0.10); }
+  html[data-theme="light"] .article.hero.no-image,
+  html[data-theme="light"] .section-card,
+  html[data-theme="light"] .settings-group { box-shadow: 0 1px 2px rgba(28,28,30,0.04), 0 4px 14px rgba(28,28,30,0.05); }
+  html[data-theme="light"] .tabbar { background: color-mix(in srgb, var(--bg) 88%, transparent); }
+
   html[data-theme="dark"] {
     --bg:#000; --bg-elev-1:#0b0b0d; --bg-elev-2:#131318; --bg-elev-3:#1d1d23;
     --hairline:rgba(255,255,255,0.06); --hairline-2:rgba(255,255,255,0.12);
@@ -243,12 +270,22 @@
     padding: 4px 0 60px;
   }
 
-  /* ---- Section header ---- */
+  /* ---- Section header (tappable) ---- */
   .section-header {
     display: flex; align-items: baseline; justify-content: space-between;
     margin: 32px var(--pad-edge) 14px;
-    padding-top: 6px;
+    padding: 6px 0 4px;
+    background: none; border: none;
+    width: calc(100% - 2 * var(--pad-edge));
+    cursor: pointer;
+    color: var(--fg);
+    font-family: inherit;
+    text-align: left;
+    transition: opacity 0.15s ease;
   }
+  .section-header:active { opacity: 0.55; }
+  .section-header.no-jump { cursor: default; }
+  .section-header.no-jump:active { opacity: 1; }
   .section-header:first-child { margin-top: 10px; }
   .section-header h2 {
     margin: 0;
@@ -268,15 +305,140 @@
   .section-header .see-more {
     font-size: 13.5px; font-weight: 500;
     color: var(--tint);
-    cursor: pointer; padding: 6px 0;
-    background: none; border: none;
+    flex: 0 0 auto;
   }
-  .section-header .see-more:active { opacity: 0.55; }
   .section-sub {
     margin: -8px var(--pad-edge) 12px;
     font-size: 13px; color: var(--fg-2);
     letter-spacing: -0.005em;
   }
+
+  /* ============ Astrology section ============ */
+  .astro-section { padding: 6px 0 30px; }
+  .astro-card {
+    margin: 12px var(--pad-edge);
+    padding: 20px 20px 18px;
+    background: var(--bg-elev-1);
+    border: 0.5px solid var(--hairline);
+    border-radius: 22px;
+  }
+  .astro-card.chart {
+    background:
+      radial-gradient(120% 80% at 0% 0%, rgba(192,163,230,0.10) 0%, transparent 60%),
+      radial-gradient(120% 80% at 100% 100%, rgba(212,175,106,0.08) 0%, transparent 60%),
+      var(--bg-elev-2);
+    border: 0.5px solid var(--hairline-2);
+  }
+  .astro-eyebrow {
+    font-size: 11px; font-weight: 700; letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--fg-3);
+    margin-bottom: 6px;
+  }
+  .astro-born {
+    font-size: 12.5px; color: var(--fg-2);
+    letter-spacing: -0.005em; margin-bottom: 16px;
+    font-variant-numeric: tabular-nums;
+  }
+  .big-three {
+    display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .b3 {
+    text-align: center;
+    padding: 14px 8px;
+    background: var(--bg-elev-2);
+    border: 0.5px solid var(--hairline);
+    border-radius: 16px;
+  }
+  .b3-glyph { font-size: 28px; line-height: 1; margin-bottom: 6px; }
+  .b3-label {
+    font-size: 10.5px; font-weight: 700; letter-spacing: 0.10em;
+    text-transform: uppercase; color: var(--fg-3); margin-bottom: 2px;
+  }
+  .b3-sign {
+    font-family: var(--serif);
+    font-size: 17px; font-weight: 700; letter-spacing: -0.014em;
+    color: var(--fg); margin-bottom: 5px;
+  }
+  .b3-note { font-size: 11px; color: var(--fg-2); line-height: 1.32; }
+
+  .placements {
+    display: flex; flex-direction: column;
+    border-top: 0.5px solid var(--hairline);
+  }
+  .placement-row {
+    display: grid;
+    grid-template-columns: 22px 1fr auto auto auto;
+    gap: 10px; align-items: center;
+    padding: 9px 0;
+    border-bottom: 0.5px solid var(--hairline);
+    font-size: 13.5px;
+  }
+  .placement-row:last-child { border-bottom: none; }
+  .p-glyph { font-size: 14px; color: var(--fg-2); text-align: center; }
+  .p-body  { font-weight: 600; letter-spacing: -0.008em; }
+  .p-sign  { font-family: var(--serif); font-weight: 600; color: var(--fg); }
+  .p-degree{ color: var(--fg-3); font-variant-numeric: tabular-nums; font-size: 12px; }
+  .p-house { color: var(--fg-3); font-size: 12px; min-width: 30px; text-align: right; }
+  .astro-note {
+    font-size: 11px; color: var(--fg-3);
+    margin-top: 10px; line-height: 1.42;
+  }
+
+  .sky-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .sky-tile {
+    text-align: center;
+    padding: 14px 8px;
+    background: var(--bg-elev-2);
+    border: 0.5px solid var(--hairline);
+    border-radius: 14px;
+  }
+  .sky-glyph { font-size: 26px; line-height: 1; margin-bottom: 6px; }
+  .sky-label { font-size: 10px; font-weight: 700; letter-spacing: 0.10em; text-transform: uppercase; color: var(--fg-3); margin-bottom: 3px; }
+  .sky-val   { font-family: var(--serif); font-size: 15px; font-weight: 600; color: var(--fg); }
+  .sky-sub   { font-size: 11px; color: var(--fg-2); margin-top: 3px; }
+
+  .reading { display: flex; flex-direction: column; gap: 14px; }
+  .reading-row { padding: 12px; background: var(--bg-elev-2); border: 0.5px solid var(--hairline); border-radius: 14px; }
+  .reading-label { font-size: 11.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--fg-2); margin-bottom: 4px; }
+  .reading-body  { font-size: 13.5px; line-height: 1.45; color: var(--fg); letter-spacing: -0.008em; }
+
+  .syn-controls { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
+  .syn-controls label { font-size: 12px; color: var(--fg-3); font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; }
+  .syn-controls input {
+    appearance: none; -webkit-appearance: none;
+    background: var(--bg-elev-2); border: 0.5px solid var(--hairline);
+    color: var(--fg); border-radius: 10px;
+    padding: 11px 13px; font: inherit; font-size: 15px;
+    color-scheme: dark light;
+  }
+  .syn-summary {
+    background: var(--bg-elev-2); border: 0.5px solid var(--hairline);
+    border-radius: 14px; padding: 14px;
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .syn-row { display: flex; justify-content: space-between; font-size: 13px; }
+  .syn-label { color: var(--fg-3); }
+  .syn-val { color: var(--fg); font-weight: 600; }
+  .syn-verdict { font-family: var(--serif); font-size: 16px; line-height: 1.35; color: var(--fg); margin-top: 4px; }
+  .syn-moon { font-size: 13px; color: var(--fg-2); line-height: 1.4; }
+
+  /* ---- Section footer (jump button at end of each section) ---- */
+  .section-footer {
+    display: block; width: calc(100% - 2 * var(--pad-edge));
+    margin: 12px var(--pad-edge) 6px;
+    padding: 14px 16px;
+    background: var(--bg-elev-2);
+    border: 0.5px solid var(--hairline);
+    border-radius: 14px;
+    color: var(--tint);
+    font-family: inherit;
+    font-size: 14px; font-weight: 600;
+    letter-spacing: -0.008em;
+    text-align: center; cursor: pointer;
+    transition: transform 0.12s ease, background 0.18s ease;
+  }
+  .section-footer:active { transform: scale(0.985); background: var(--bg-elev-3); }
 
   /* ============ Quick Brief — premium card at top ============ */
   .quick-brief {
@@ -944,6 +1106,7 @@
       <button class="seg" data-cat="markets" role="tab">Markets</button>
       <button class="seg" data-cat="style" role="tab">Style &amp; Beauty</button>
       <button class="seg" data-cat="pop-culture" role="tab">Pop Culture</button>
+      <button class="seg" data-cat="astrology" role="tab">Stars</button>
       <button class="seg" data-cat="us-news" role="tab">US</button>
       <button class="seg" data-cat="canada-news" role="tab">Canada</button>
       <button class="seg" data-cat="israel-iran" role="tab">Israel/Iran</button>

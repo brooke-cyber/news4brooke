@@ -1,7 +1,7 @@
 // Brief — service worker
 // Caches app shell so the PWA opens instantly and works offline (showing cached articles).
 
-const CACHE = 'n4b-shell-v11';
+const CACHE = 'n4b-shell-v12';
 const SHELL = [
   './',
   './index.html',
